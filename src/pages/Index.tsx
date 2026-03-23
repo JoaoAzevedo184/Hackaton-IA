@@ -1,134 +1,145 @@
-import MatchHeader from "@/components/match/MatchHeader";
-import Scoreboard from "@/components/match/Scoreboard";
-import HeatMap from "@/components/match/HeatMap";
-import MatchTimeline from "@/components/match/MatchTimeline";
-import ProbabilityBar from "@/components/match/ProbabilityBar";
-import AIInsightPanel from "@/components/match/AIInsightPanel";
-import BetCTA from "@/components/match/BetCTA";
-import ChatAssistant from "@/components/match/ChatAssistant";
-import type { TimelineEvent } from "@/components/match/MatchTimeline";
-
-const mockHeatPoints = [
-  { x: 15, y: 30, intensity: 0.5 },
-  { x: 20, y: 50, intensity: 0.7 },
-  { x: 25, y: 65, intensity: 0.6 },
-  { x: 35, y: 40, intensity: 0.8 },
-  { x: 35, y: 55, intensity: 0.9 },
-  { x: 40, y: 50, intensity: 0.75 },
-  { x: 45, y: 35, intensity: 0.6 },
-  { x: 45, y: 60, intensity: 0.55 },
-  { x: 50, y: 50, intensity: 0.4 },
-  { x: 55, y: 45, intensity: 0.35 },
-  { x: 60, y: 30, intensity: 0.4 },
-  { x: 60, y: 65, intensity: 0.3 },
-  { x: 70, y: 50, intensity: 0.5 },
-  { x: 75, y: 40, intensity: 0.6 },
-  { x: 80, y: 50, intensity: 0.45 },
-  { x: 85, y: 55, intensity: 0.3 },
-];
-
-const mockTimeline: TimelineEvent[] = [
-  { minute: 12, type: "shot", team: "home", player: "Saka", description: "Finalização de fora da área, defesa do goleiro." },
-  { minute: 23, type: "corner", team: "away", player: "De Bruyne", description: "Escanteio pela direita, afastado pela defesa." },
-  { minute: 34, type: "yellow", team: "home", player: "Rice", description: "Cartão amarelo por falta tática no meio-campo." },
-  { minute: 41, type: "save", team: "home", player: "Raya", description: "Grande defesa em cabeceio de Haaland." },
-  { minute: 52, type: "goal", team: "away", player: "Haaland", description: "Gol! Finalização de primeira dentro da área após cruzamento de Doku." },
-  { minute: 64, type: "substitution", team: "home", player: "Havertz → Trossard", description: "Substituição tática, Arsenal busca mais velocidade." },
-  { minute: 71, type: "goal", team: "away", player: "O'Reilly", description: "Gol! Chute de fora da área no canto direito." },
-  { minute: 78, type: "shot", team: "home", player: "Saka", description: "Finalização perigosa, bola passa perto da trave." },
-  { minute: 85, type: "corner", team: "home", player: "Ødegaard", description: "Escanteio pela esquerda, cabeceio por cima." },
-  { minute: 90, type: "yellow", team: "away", player: "Gvardiol", description: "Cartão amarelo por falta na entrada da área." },
-];
-
-const mockInsights = [
-  {
-    title: "Man City com 83% de chance de vitória",
-    text: "Com 2x0 no placar e controle de 58% da posse, o modelo projeta vitória do City com alta confiança. Arsenal não conseguiu criar perigo suficiente — apenas 0.8 xG acumulado.",
-    confidence: 0.93,
-    type: "probability" as const,
-  },
-  {
-    title: "Mais gols são prováveis",
-    text: "Padrão ofensivo do City sugere 72% de chance de pelo menos mais 1 gol na partida. Arsenal aberto atrás após as substituições. Over 2.5 gols é quase certo.",
-    confidence: 0.88,
-    type: "trend" as const,
-  },
-  {
-    title: "Haaland marca novamente?",
-    text: "Com 3 finalizações na área e xG individual de 0.74, Haaland tem 61% de probabilidade de marcar mais um gol nos minutos finais. Arsenal não consegue marcá-lo.",
-    confidence: 0.82,
-    type: "value" as const,
-  },
-  {
-    title: "Arsenal sem reação",
-    text: "Apenas 12% de sucesso no pressing. Sem finalizações no alvo nos últimos 25 minutos. Modelo indica 4% de chance de virada — resultado praticamente definido.",
-    confidence: 0.91,
-    type: "alert" as const,
-  },
-  {
-    title: "Handicap City -1.5 com valor",
-    text: "A odd atual para City -1.5 oferece valor: o modelo projeta 67% de probabilidade contra os 55% implícitos da odd. Aposta de valor identificada.",
-    confidence: 0.79,
-    type: "value" as const,
-  },
-];
+import { useMatchData } from "@/hooks/useMatchData";
+import {
+  MatchHeader,
+  Scoreboard,
+  HeatMap,
+  MatchTimeline,
+  ProbabilityBar,
+  AIInsightPanel,
+  BetCTA,
+  ChatAssistant,
+} from "@/components/match";
 
 const Index = () => {
+  const { data: match, isLoading, error } = useMatchData();
+
+  if (isLoading) return <LoadingSkeleton />;
+  if (error || !match) return <ErrorState />;
+
+  const { info, probability, heatPoints, timeline, insights, betRecommendation } = match;
+
   return (
     <div className="min-h-screen bg-background">
-      <MatchHeader league="Premier League" season="2025/26" round="Rodada 28" />
+      <MatchHeader
+        league={info.league}
+        season={info.season}
+        round={info.round}
+      />
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Scoreboard */}
-        <div className="animate-fade-up" style={{ opacity: 0 }}>
+        <AnimatedSection>
           <Scoreboard
-            home={{ name: "Arsenal", shortName: "ARS", logo: "🔴", score: 0 }}
-            away={{ name: "Manchester City", shortName: "MNC", logo: "🔵", score: 2 }}
-            minute="90:01"
-            half="2º Tempo"
+            home={info.home}
+            away={info.away}
+            minute={info.minute}
+            half={info.half}
+            isLive={info.isLive}
           />
-        </div>
+        </AnimatedSection>
 
-        {/* Probability */}
-        <div className="animate-fade-up animation-delay-100" style={{ opacity: 0 }}>
+        {/* Probabilidade */}
+        <AnimatedSection delay={1}>
           <ProbabilityBar
-            homeWin={8.3}
-            draw={9.2}
-            awayWin={82.5}
-            homeName="Arsenal"
-            awayName="Man City"
+            homeWin={probability.homeWin}
+            draw={probability.draw}
+            awayWin={probability.awayWin}
+            homeName={info.home.name}
+            awayName={info.away.name}
           />
-        </div>
+        </AnimatedSection>
 
-        {/* Main grid */}
+        {/* Grid principal */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Heat map + Timeline */}
+          {/* Esquerda: Heatmap + Timeline */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="animate-fade-up animation-delay-200" style={{ opacity: 0 }}>
-              <HeatMap points={mockHeatPoints} title="Mapa de Calor — Movimentação" teamLabel="Arsenal" />
-            </div>
-            <div className="animate-fade-up animation-delay-300" style={{ opacity: 0 }}>
-              <MatchTimeline events={mockTimeline} />
-            </div>
+            <AnimatedSection delay={2}>
+              <HeatMap
+                points={heatPoints}
+                title="Mapa de Calor — Movimentação"
+                teamLabel={info.home.shortName}
+              />
+            </AnimatedSection>
+            <AnimatedSection delay={3}>
+              <MatchTimeline
+                events={timeline}
+                homeShortName={info.home.shortName}
+                awayShortName={info.away.shortName}
+              />
+            </AnimatedSection>
           </div>
 
-          {/* Right: AI + CTA */}
+          {/* Direita: IA + CTA */}
           <div className="space-y-6">
-            <div className="animate-fade-up animation-delay-200" style={{ opacity: 0 }}>
-              <AIInsightPanel insights={mockInsights} />
-            </div>
-            <div className="animate-fade-up animation-delay-400" style={{ opacity: 0 }}>
+            <AnimatedSection delay={2}>
+              <AIInsightPanel insights={insights} />
+            </AnimatedSection>
+            <AnimatedSection delay={4}>
               <BetCTA
-                recommendation="Man City vence com pelo menos 2 gols de diferença. Handicap -1.5 oferece valor acima da média."
-                confidence={87}
+                recommendation={betRecommendation.recommendation}
+                confidence={betRecommendation.confidence}
               />
-            </div>
+            </AnimatedSection>
           </div>
         </div>
       </main>
+
       <ChatAssistant />
     </div>
   );
 };
+
+// ─── Componentes auxiliares da página ─────────────────────────────────
+
+const DELAY_MAP = [0, 80, 160, 240, 320] as const;
+
+function AnimatedSection({
+  children,
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+}) {
+  return (
+    <div
+      className="animate-fade-up"
+      style={{ opacity: 0, animationDelay: `${DELAY_MAP[delay] ?? 0}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Carregando partida...</p>
+      </div>
+    </div>
+  );
+}
+
+function ErrorState() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-2">
+        <p className="text-lg font-semibold text-foreground">
+          Erro ao carregar dados
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Verifique a conexão e tente novamente.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+        >
+          Recarregar
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default Index;
