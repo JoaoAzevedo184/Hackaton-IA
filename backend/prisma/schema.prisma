@@ -1,0 +1,182 @@
+// ─── Prisma Schema — Esportes da Sorte IA ────────────────────────────
+//
+// Modelagem do domínio de partidas, eventos, probabilidades e insights.
+// O n8n alimenta essas tabelas via webhooks → workflows → PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Times ───────────────────────────────────────────────────────────
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String   @map("short_name")
+  logo      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+
+  @@map("teams")
+}
+
+// ─── Partidas ────────────────────────────────────────────────────────
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+
+  @@map("match_status")
+}
+
+model Match {
+  id       String      @id @default(cuid())
+  league   String
+  season   String
+  round    String?
+  status   MatchStatus @default(UPCOMING)
+  minute   String      @default("0")
+  half     String      @default("")
+  isLive   Boolean     @default(false) @map("is_live")
+
+  homeTeamId String @map("home_team_id")
+  awayTeamId String @map("away_team_id")
+  homeScore  Int    @default(0) @map("home_score")
+  awayScore  Int    @default(0) @map("away_score")
+
+  homeTeam Team @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  events        MatchEvent[]
+  probability   MatchProbability?
+  heatPoints    HeatPoint[]
+  insights      Insight[]
+  recommendation BetRecommendation?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([isLive])
+  @@map("matches")
+}
+
+// ─── Eventos (timeline) ──────────────────────────────────────────────
+
+enum EventType {
+  GOAL
+  YELLOW
+  RED
+  SUBSTITUTION
+  CORNER
+  SHOT
+  SAVE
+
+  @@map("event_type")
+}
+
+enum TeamSide {
+  HOME
+  AWAY
+
+  @@map("team_side")
+}
+
+model MatchEvent {
+  id          String    @id @default(cuid())
+  matchId     String    @map("match_id")
+  minute      Int
+  type        EventType
+  team        TeamSide
+  player      String?
+  description String
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([matchId])
+  @@map("match_events")
+}
+
+// ─── Probabilidades ──────────────────────────────────────────────────
+
+model MatchProbability {
+  id      String @id @default(cuid())
+  matchId String @unique @map("match_id")
+  homeWin Float  @map("home_win")
+  draw    Float
+  awayWin Float  @map("away_win")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("match_probabilities")
+}
+
+// ─── Mapa de Calor ───────────────────────────────────────────────────
+
+model HeatPoint {
+  id        String @id @default(cuid())
+  matchId   String @map("match_id")
+  x         Float  // 0-100
+  y         Float  // 0-100
+  intensity Float  // 0-1
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+  @@map("heat_points")
+}
+
+// ─── Insights IA ─────────────────────────────────────────────────────
+
+enum InsightCategory {
+  PROBABILITY
+  TREND
+  VALUE
+  ALERT
+
+  @@map("insight_category")
+}
+
+model Insight {
+  id         String          @id @default(cuid())
+  matchId    String          @map("match_id")
+  title      String
+  text       String
+  confidence Float           // 0-1
+  type       InsightCategory
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([matchId])
+  @@map("insights")
+}
+
+// ─── Recomendação de Aposta ──────────────────────────────────────────
+
+model BetRecommendation {
+  id             String @id @default(cuid())
+  matchId        String @unique @map("match_id")
+  recommendation String
+  confidence     Int    // 0-100
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("bet_recommendations")
+}
