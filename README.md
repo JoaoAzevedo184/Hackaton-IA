@@ -1,128 +1,106 @@
-# Hackaton-IA
+# Esportes da Sorte — IA Analytics
 
-Aplicação web de visualização e análise probabilística de partidas de futebol em tempo real, com insights gerados por IA e recomendações de apostas.
-
-> **Status atual:** Wireframe / Protótipo com dados mock — arquitetura de dados (PostgreSQL + n8n) em definição.
-
-## Visão Geral
-
-O projeto entrega um painel interativo para acompanhamento ao vivo de partidas de futebol, combinando visualizações de dados (heatmap, timeline, barras de probabilidade) com análises de IA e um assistente via chat.
-
-### Stack
-
-| Camada | Tecnologia |
-|---|---|
-| Frontend | React 18 · TypeScript · Vite |
-| UI | shadcn/ui · Radix · Tailwind CSS |
-| Estado | TanStack React Query |
-| Roteamento | React Router DOM |
-| Testes | Vitest |
-| Dados (planejado) | PostgreSQL |
-| Automação (planejado) | n8n |
+Plataforma de visualização e análise probabilística de partidas de futebol em tempo real, com insights gerados por IA e recomendações de apostas.
 
 ## Arquitetura
 
 ```
-┌─────────────┐       ┌──────────┐      ┌────────────────┐
-│  Fontes de  │────▶ │    n8n   │─────▶│  PostgreSQL    │
-│  Dados      │       │ Workflows│      │  (dados live + │
-│  (APIs/WS)  │       └──────────┘      │   histórico)   │
-└─────────────┘                         └───────┬────────┘
-                                                │
-                                        ┌───────▼────────┐
-                                        │  API Backend   │
-                                        │  (a definir)   │
-                                        └───────┬────────┘
-                                                │
-                                        ┌───────▼────────┐
-                                        │  React Frontend│
-                                        │  (este repo)   │
-                                        └────────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    React     │────▶│  Express API │────▶│  PostgreSQL   │
+│   Frontend   │     │   (Prisma)   │     │              │
+│    :8080     │     │    :3001     │     │    :5432     │
+└──────────────┘     └──────┬───────┘     └──────────────┘
+                            ▲
+                    ┌───────┴───────┐
+                    │      n8n      │
+                    │  (Webhooks)   │
+                    └───────────────┘
 ```
 
-### Fluxo de dados planejado
+| Camada | Stack | Porta |
+|---|---|---|
+| Frontend | React 18 · TypeScript · Vite · Tailwind | `:8080` |
+| Backend | Express · Prisma · Zod | `:3001` |
+| Banco | PostgreSQL 16 | `:5432` |
+| Automação | n8n (webhooks) | — |
 
-1. **Fontes externas** fornecem dados de partidas, odds e estatísticas.
-2. **n8n** orquestra a ingestão — transforma, enriquece e persiste no banco.
-3. **PostgreSQL** armazena dados de partidas, eventos, probabilidades e insights.
-4. **API Backend** (stack a definir) expõe os dados via REST ou WebSocket.
-5. **Frontend React** consome e renderiza em tempo real.
-
-> Atualmente o frontend opera com dados mock definidos em `src/pages/Index.tsx`. A integração com PostgreSQL + n8n substituirá esses mocks.
-
-## Estrutura do Projeto
+## Estrutura do Monorepo
 
 ```
-src/
-├── App.tsx                  # Providers (QueryClient, Tooltip, Toaster) e rotas
-├── pages/
-│   ├── Index.tsx            # Página principal — layout do painel + dados mock
-│   └── NotFound.tsx         # 404
-├── components/
-│   ├── match/               # Componentes do painel de partida
-│   │   ├── MatchHeader.tsx
-│   │   ├── Scoreboard.tsx
-│   │   ├── ProbabilityBar.tsx
-│   │   ├── HeatMap.tsx
-│   │   ├── MatchTimeline.tsx
-│   │   ├── AIInsightPanel.tsx
-│   │   ├── BetCTA.tsx
-│   │   └── ChatAssistant.tsx
-│   └── ui/                  # Componentes genéricos (shadcn/Radix)
-├── hooks/
-│   ├── use-mobile.tsx       # Detecção de dispositivo mobile
-│   └── use-toast.ts         # Abstração de notificações toast
-├── lib/
-│   └── utils.ts             # Utilitários (cn, formatação, parsers)
-└── test/
-    ├── setup.ts
-    └── example.test.ts
+HACKATON-IA/
+├── frontend/          → App React (UI + consumo da API)
+├── backend/           → API Express + Prisma (PostgreSQL)
+└── README.md          → Este arquivo
 ```
 
-## Componentes do Painel
+Cada pasta tem seu próprio `README.md` com instruções detalhadas.
 
-| Componente | Responsabilidade |
-|---|---|
-| `MatchHeader` | Liga, temporada e rodada |
-| `Scoreboard` | Placar ao vivo, minuto, condições de jogo |
-| `ProbabilityBar` | Barra de probabilidade home / empate / away |
-| `HeatMap` | Mapa de calor de movimentação (pontos x/y/intensidade) |
-| `MatchTimeline` | Eventos por minuto — gol, escanteio, cartão, etc. |
-| `AIInsightPanel` | Cards de insight com categoria e nível de confiança |
-| `BetCTA` | Recomendação de aposta com botão de ação |
-| `ChatAssistant` | Assistente IA conversacional em tempo real |
+## Quick Start
 
-## Instalação
-
-Requer Node.js 18+ e npm/yarn/pnpm.
+### 1. PostgreSQL
 
 ```bash
-npm install
-npm run dev
+docker run -d --name esportes-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=esportes_da_sorte \
+  -p 5432:5432 postgres:16-alpine
 ```
 
-Acesse `http://localhost:5173`.
+### 2. Backend
 
-## Scripts
+```bash
+cd backend
+cp .env.example .env      # editar DATABASE_URL se necessário
+npm install
+npx prisma generate
+npx prisma db push
+npm run db:seed
+npm run dev               # → http://localhost:3001
+```
 
-| Comando | Descrição |
-|---|---|
-| `npm run dev` | Servidor de desenvolvimento |
-| `npm run build` | Build de produção |
-| `npm run build:dev` | Build de desenvolvimento |
-| `npm run preview` | Preview local do build |
-| `npm run lint` | Lint com ESLint |
-| `npm test` | Testes com Vitest |
-| `npm run test:watch` | Testes em modo watch |
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev               # → http://localhost:8080
+```
+
+> O frontend funciona sem o backend — cai automaticamente em dados mock.
+
+## Fluxo de Dados
+
+1. **Fontes externas** fornecem dados de partidas, odds e estatísticas
+2. **n8n** orquestra a ingestão via webhooks → transforma → persiste
+3. **PostgreSQL** armazena partidas, eventos, probabilidades e insights
+4. **API Express** expõe os dados via REST
+5. **Frontend React** consome via React Query com fallback mock
+
+## Modelo do Banco
+
+```
+teams ──────────── matches ──┬── match_events
+                      │       ├── match_probabilities
+                      │       ├── heat_points
+                      │       ├── insights
+                      │       └── bet_recommendations
+```
 
 ## Roadmap
 
 - [x] Wireframe do painel com componentes mock
-- [ ] Modelagem do banco PostgreSQL (partidas, eventos, odds, insights)
-- [ ] Workflows n8n para ingestão e transformação de dados
-- [ ] API Backend para servir dados ao frontend
-- [ ] Substituir mocks por dados reais via React Query
+- [x] Refatoração — tipos, constants, services, hooks
+- [x] Logo + favicon Esportes da Sorte
+- [x] Rotas com lazy loading
+- [x] Modelagem do banco PostgreSQL (7 tabelas)
+- [x] API Express + Prisma com endpoints REST
+- [x] Webhooks para ingestão via n8n
+- [x] Seed com dados de teste
+- [x] Frontend conectado à API com fallback mock
+- [ ] Workflows n8n para ingestão automática
 - [ ] WebSocket para atualização em tempo real
+- [ ] Integração com IA real no ChatAssistant
 - [ ] Autenticação de usuários
 - [ ] Deploy
 
