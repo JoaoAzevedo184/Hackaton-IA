@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { matchRoutes } from "./routes/match.routes";
 import { webhookRoutes } from "./routes/webhook.routes";
+import { betsapiRoutes } from "./routes/betsapi.routes";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -19,11 +20,13 @@ app.get("/api/health", (_req, res) => {
 // ─── Rotas ───────────────────────────────────────────────────────────
 app.use("/api/matches", matchRoutes);
 app.use("/api/webhooks", webhookRoutes);
+app.use("/api/betsapi", betsapiRoutes);
 
 // ─── Start ───────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🟢 API rodando em http://localhost:${PORT}`);
-  console.log(`   Health:   http://localhost:${PORT}/api/health`);
-  console.log(`   Matches:  http://localhost:${PORT}/api/matches`);
-  console.log(`   Webhooks: http://localhost:${PORT}/api/webhooks\n`);
+  console.log(`   Health:    http://localhost:${PORT}/api/health`);
+  console.log(`   Matches:   http://localhost:${PORT}/api/matches`);
+  console.log(`   BetsAPI:   http://localhost:${PORT}/api/betsapi/inplay`);
+  console.log(`   Webhooks:  http://localhost:${PORT}/api/webhooks\n`);
 });
