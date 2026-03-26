@@ -111,15 +111,12 @@ const Dashboard = () => {
 
           {/* Filtros */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {/* Todos */}
             <FilterChip
               label="Todos"
               count={realLive.length}
               active={selectedCountry === null && hideEsports}
               onClick={() => { setSelectedCountry(null); setHideEsports(true); }}
             />
-
-            {/* Países com jogos */}
             {countries.map((c) => (
               <FilterChip
                 key={c.code}
@@ -133,8 +130,6 @@ const Dashboard = () => {
                 }}
               />
             ))}
-
-            {/* eSports */}
             {esportsCount > 0 && (
               <FilterChip
                 label="eSports"
@@ -199,7 +194,6 @@ const Dashboard = () => {
 
             <span className="text-border mx-1">|</span>
 
-            {/* Filtro de país para encerrados */}
             <select
               value={endedCountry ?? ""}
               onChange={(e) => setEndedCountry(e.target.value || null)}
@@ -259,7 +253,7 @@ const Dashboard = () => {
 // COMPONENTES
 // ═══════════════════════════════════════════════════════════════════════
 
-// ─── Card de jogo AO VIVO (com stats expandidos) ─────────────────────
+// ─── Card de jogo AO VIVO ────────────────────────────────────────────
 
 const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
   const [expanded, setExpanded] = useState(false);
@@ -270,11 +264,12 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
   const stats = event.stats;
 
   return (
-    <div
-      className="bg-card rounded-lg border border-primary/15 overflow-hidden shadow-[0_0_20px_hsla(142,72%,48%,0.04)] transition-all hover:border-primary/25"
-    >
-      {/* Header: Liga + Timer */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-secondary/10">
+    <div className="bg-card rounded-lg border border-primary/15 overflow-hidden shadow-[0_0_20px_hsla(142,72%,48%,0.04)] transition-all hover:border-primary/25">
+      {/* Header: Liga + Timer — clicável para ir ao detalhe */}
+      <Link
+        to={`/match/${event.id}`}
+        className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-secondary/10 hover:bg-secondary/20 transition-colors"
+      >
         <div className="flex items-center gap-2 min-w-0">
           <Flag cc={event.league.cc} />
           <span className="text-[10px] text-muted-foreground truncate">{event.league.name}</span>
@@ -290,12 +285,11 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
             <span className="text-[11px] font-bold font-mono-data text-live-pulse">{minute}'</span>
           )}
         </div>
-      </div>
+      </Link>
 
-      {/* Placar */}
-      <div className="px-4 py-3">
+      {/* Placar — clicável para ir ao detalhe */}
+      <Link to={`/match/${event.id}`} className="block px-4 py-3 hover:bg-secondary/5 transition-colors">
         <div className="flex items-center gap-3">
-          {/* Home */}
           <div className="flex-1 min-w-0">
             <TeamRow
               name={event.home.name}
@@ -311,16 +305,14 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
               <span className="text-lg text-muted-foreground font-light">-</span>
               <span className="text-2xl font-black font-mono-data text-primary">{scores[1]}</span>
             </div>
-            {/* Placar por tempo */}
             {event.scores && (
               <div className="text-[9px] text-muted-foreground font-mono-data mt-0.5">
-                {Object.entries(event.scores).map(([half, sc]) => (
-                  <span key={half} className="mx-0.5">({sc.home}-{sc.away})</span>
+                {Object.entries(event.scores).map(([halfKey, sc]) => (
+                  <span key={halfKey} className="mx-0.5">({sc.home}-{sc.away})</span>
                 ))}
               </div>
             )}
           </div>
-          {/* Away */}
           <div className="flex-1 min-w-0">
             <TeamRow
               name={event.away.name}
@@ -333,7 +325,6 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
           </div>
         </div>
 
-        {/* Stats resumidos (sempre visíveis) */}
         {stats && (
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
             <QuickStat label="Posse" home={stats.possession_rt?.[0]} away={stats.possession_rt?.[1]} suffix="%" />
@@ -342,7 +333,7 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
             {stats.xg && <QuickStat label="xG" home={stats.xg[0]} away={stats.xg[1]} />}
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Botão expandir stats */}
       {stats && (
@@ -353,7 +344,6 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
           >
             {expanded ? "Ocultar estatísticas ▲" : "Ver estatísticas ▼"}
           </button>
-
           {expanded && <StatsPanel stats={stats} />}
         </>
       )}
@@ -413,14 +403,8 @@ const StatBar = ({ label, home, away }: { label: string; home: string; away: str
     <div className="flex items-center gap-2 py-1">
       <span className="text-[11px] font-mono-data text-foreground w-8 text-right shrink-0">{home}</span>
       <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden flex">
-        <div
-          className="h-full bg-stat-bar rounded-l-full transition-all duration-700"
-          style={{ width: `${homePercent}%` }}
-        />
-        <div
-          className="h-full bg-stat-bar-away rounded-r-full transition-all duration-700"
-          style={{ width: `${100 - homePercent}%` }}
-        />
+        <div className="h-full bg-stat-bar rounded-l-full transition-all duration-700" style={{ width: `${homePercent}%` }} />
+        <div className="h-full bg-stat-bar-away rounded-r-full transition-all duration-700" style={{ width: `${100 - homePercent}%` }} />
       </div>
       <span className="text-[11px] font-mono-data text-foreground w-8 shrink-0">{away}</span>
       <span className="text-[9px] text-muted-foreground w-28 truncate shrink-0">{label}</span>
@@ -434,7 +418,10 @@ const EndedMatchCard = ({ event }: { event: BetsApiEvent }) => {
   const scores = event.ss?.split("-") ?? ["0", "0"];
 
   return (
-    <div className="bg-card rounded-lg border border-border/50 overflow-hidden hover:border-border transition-colors">
+    <Link
+      to={`/match/${event.id}`}
+      className="block bg-card rounded-lg border border-border/50 overflow-hidden hover:border-primary/20 hover:shadow-[0_0_16px_hsla(142,72%,48%,0.06)] transition-all"
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
         <div className="flex items-center gap-2 min-w-0">
           <Flag cc={event.league.cc} />
@@ -463,7 +450,7 @@ const EndedMatchCard = ({ event }: { event: BetsApiEvent }) => {
       <div className="px-3 py-1.5 border-t border-border/20 bg-secondary/10">
         <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Encerrado</span>
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -620,8 +607,6 @@ const ErrorBox = ({ message }: { message: string }) => (
     <p className="text-xs text-muted-foreground mt-1">Verifique se o backend está rodando e o token da BetsAPI está configurado.</p>
   </div>
 );
-
-// ─── Países para filtro de encerrados ────────────────────────────────
 
 const COUNTRY_OPTIONS: Record<string, string> = {
   br: "🇧🇷 Brasil",

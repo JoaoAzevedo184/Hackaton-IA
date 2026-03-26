@@ -3,7 +3,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "@/pages/Index";
+import Dashboard from "@/pages/Dashboard";
+import MatchDetail from "../src/pages/MatchDetail";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -22,8 +23,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* Adicionar rotas customizadas ACIMA do catch-all */}
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/match/:matchId" element={<MatchDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
