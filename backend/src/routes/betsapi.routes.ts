@@ -13,8 +13,9 @@ const SPORT_SOCCER = "1";
  * repassa para a BetsAPI com o token escondido.
  *
  * Endpoints BetsAPI utilizados:
- *   GET /v3/events/inplay   → jogos ao vivo
- *   GET /v3/events/ended    → jogos encerrados (param day=YYYYMMDD)
+ *   GET /v3/events/inplay    → jogos ao vivo
+ *   GET /v3/events/upcoming  → jogos que vão acontecer
+ *   GET /v3/events/ended     → jogos encerrados (param day=YYYYMMDD)
  */
 
 // ─── GET /api/betsapi/inplay — Jogos ao vivo ─────────────────────────
@@ -27,6 +28,31 @@ betsapiRoutes.get("/inplay", async (_req: Request, res: Response) => {
   } catch (error) {
     console.error("Erro ao buscar jogos ao vivo:", error);
     res.status(502).json({ error: "Falha ao buscar jogos ao vivo da BetsAPI" });
+  }
+});
+
+// ─── GET /api/betsapi/upcoming — Jogos que vão acontecer ─────────────
+
+betsapiRoutes.get("/upcoming", async (req: Request, res: Response) => {
+  try {
+    const { page, day, cc, league_id } = req.query;
+
+    const params = new URLSearchParams({
+      sport_id: SPORT_SOCCER,
+      token: BETSAPI_TOKEN,
+    });
+
+    if (page) params.set("page", String(page));
+    if (day) params.set("day", String(day));
+    if (cc) params.set("cc", String(cc));
+    if (league_id) params.set("league_id", String(league_id));
+
+    const url = `${BETSAPI_BASE}/events/upcoming?${params.toString()}`;
+    const data = await fetchBetsApi(url);
+    res.json(data);
+  } catch (error) {
+    console.error("Erro ao buscar próximos jogos:", error);
+    res.status(502).json({ error: "Falha ao buscar próximos jogos da BetsAPI" });
   }
 });
 
