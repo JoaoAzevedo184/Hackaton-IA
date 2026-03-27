@@ -289,5 +289,7 @@ export function flagUrl(cc?: string | null): string {
 
 export function getHalfLabel(timer?: BetsApiTimer): string {
   if (!timer) return "";
-  return timer.tt === "0" ? "1T" : "2T";
+  if (timer.tt === "1") return "1T";
+  if (timer.tt === "2") return "2T";
+  return "";
 }

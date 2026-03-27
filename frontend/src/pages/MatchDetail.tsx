@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useMatchData } from "@/hooks/useMatchData";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
 import { useTimelineHeatPoints } from "@/hooks/useTimelineHeatPoints";
+import { useAIAnalysis } from "@/hooks/useAIAnalysis";
 import {
   MatchHeader,
   Scoreboard,
@@ -18,7 +19,7 @@ const MatchDetail = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const { data: match, isLoading, error } = useMatchData(matchId);
 
-  // Hooks ANTES dos early returns (regra do React)
+  // Hooks ANTES dos early returns
   const { minute: liveMinute, half: liveHalf } = useLiveTimer(
     match?.info.minute ?? "0",
     match?.info.half ?? "",
@@ -30,10 +31,22 @@ const MatchDetail = () => {
     liveMinute,
   );
 
+  // Chama o n8n pra análise IA quando a partida carrega
+  const { data: aiResult, isLoading: aiLoading } = useAIAnalysis(match);
+
   if (isLoading) return <LoadingSkeleton />;
   if (error || !match) return <ErrorState />;
 
   const { info, probability, heatPoints, timeline, insights, betRecommendation } = match;
+
+  // Usa dados da IA se disponíveis, senão usa estimativa local
+  const finalProbability = aiResult?.probability ?? probability;
+  const finalInsights = aiResult?.insights?.length
+    ? aiResult.insights
+    : insights;
+  const finalRecommendation = aiResult
+    ? { recommendation: aiResult.recommendation, confidence: aiResult.confidence }
+    : betRecommendation;
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,14 +75,29 @@ const MatchDetail = () => {
           />
         </AnimatedSection>
 
+        {/* Probabilidade — mostra badge se veio da IA */}
         <AnimatedSection delay={1}>
-          <ProbabilityBar
-            homeWin={probability.homeWin}
-            draw={probability.draw}
-            awayWin={probability.awayWin}
-            homeName={info.home.name}
-            awayName={info.away.name}
-          />
+          <div className="relative">
+            {aiLoading && (
+              <div className="absolute -top-2 right-2 z-10 flex items-center gap-1.5 bg-primary/10 text-primary text-[10px] font-bold px-2 py-1 rounded-full animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-live-dot" />
+                Edson analisando...
+              </div>
+            )}
+            {aiResult && !aiLoading && (
+              <div className="absolute -top-2 right-2 z-10 flex items-center gap-1.5 bg-primary/10 text-primary text-[10px] font-bold px-2 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                Análise IA do Edson
+              </div>
+            )}
+            <ProbabilityBar
+              homeWin={finalProbability.homeWin}
+              draw={finalProbability.draw}
+              awayWin={finalProbability.awayWin}
+              homeName={info.home.name}
+              awayName={info.away.name}
+            />
+          </div>
         </AnimatedSection>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -95,12 +123,12 @@ const MatchDetail = () => {
 
           <div className="space-y-6">
             <AnimatedSection delay={2}>
-              <AIInsightPanel insights={insights} />
+              <AIInsightPanel insights={finalInsights} />
             </AnimatedSection>
             <AnimatedSection delay={4}>
               <BetCTA
-                recommendation={betRecommendation.recommendation}
-                confidence={betRecommendation.confidence}
+                recommendation={finalRecommendation.recommendation}
+                confidence={finalRecommendation.confidence}
               />
             </AnimatedSection>
           </div>

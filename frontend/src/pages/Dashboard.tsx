@@ -20,6 +20,7 @@ import {
   type BetsApiStats,
   type BetsApiTimer,
 } from "@/services/betsapiService";
+import { ChatAssistant } from "@/components/match";
 
 const REFETCH_LIVE_MS = 30_000;
 const DAYS_TO_SHOW = 3;
@@ -353,6 +354,7 @@ const Dashboard = () => {
           )}
         </section>
       </main>
+      <ChatAssistant />
     </div>
   );
 };
@@ -665,7 +667,7 @@ const TeamRow = ({
   reverse?: boolean;
 }) => (
   <div className={`flex items-center gap-2 ${reverse ? "flex-row-reverse text-right" : ""}`}>
-    <TeamLogo imageId={imageId} />
+    <TeamLogo imageId={imageId} name={name} />
     <span className={`text-xs truncate ${isWinner ? "font-bold text-foreground" : "text-muted-foreground"}`}>
       {name}
     </span>
@@ -674,20 +676,31 @@ const TeamRow = ({
 
 const TeamRowCompact = ({ name, imageId, reverse }: { name: string; imageId?: string | null; reverse?: boolean }) => (
   <div className={`flex items-center gap-2 min-w-0 ${reverse ? "flex-row-reverse" : ""}`}>
-    <TeamLogo imageId={imageId} size="sm" />
+    <TeamLogo imageId={imageId} name={name} size="sm" />
     <span className="text-xs text-foreground truncate">{name}</span>
   </div>
 );
 
-const TeamLogo = ({ imageId, size = "md" }: { imageId?: string | null; size?: "sm" | "md" }) => {
-  const s = size === "sm" ? "w-4 h-4" : "w-5 h-5";
-  if (!imageId) return <div className={`${s} rounded bg-secondary/40 shrink-0`} />;
+const TeamLogo = ({ imageId, name, size = "md" }: { imageId?: string | null; name?: string; size?: "sm" | "md" }) => {
+  const s = size === "sm" ? "w-4 h-4 text-[6px]" : "w-5 h-5 text-[7px]";
+  const initials = name ? name.substring(0, 2).toUpperCase() : "??";
+
+  if (!imageId) {
+    return (
+      <div className={`${s} rounded bg-secondary flex items-center justify-center font-bold text-muted-foreground shrink-0`}>
+        {initials}
+      </div>
+    );
+  }
   return (
     <img
       src={teamLogoUrl(imageId)}
       alt=""
-      className={`${s} object-contain shrink-0`}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+      className={`${size === "sm" ? "w-4 h-4" : "w-5 h-5"} object-contain shrink-0`}
+      onError={(e) => {
+        const el = e.target as HTMLImageElement;
+        el.style.display = "none";
+      }}
     />
   );
 };

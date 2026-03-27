@@ -38,6 +38,8 @@ const TeamDisplay: FC<{ team: Team; align: "left" | "right" }> = ({
   align,
 }) => {
   const isRight = align === "right";
+  const isUrl = team.logo.startsWith("http");
+  const initials = team.shortName.substring(0, 2);
 
   return (
     <div
@@ -45,12 +47,37 @@ const TeamDisplay: FC<{ team: Team; align: "left" | "right" }> = ({
         isRight ? "justify-end text-right" : ""
       }`}
     >
-      {!isRight && <span className="text-3xl">{team.logo}</span>}
+      {!isRight && <Logo isUrl={isUrl} src={team.logo} initials={initials} />}
       <div>
         <p className="text-lg font-bold text-foreground">{team.name}</p>
         <p className="text-sm text-muted-foreground">{team.shortName}</p>
       </div>
-      {isRight && <span className="text-3xl">{team.logo}</span>}
+      {isRight && <Logo isUrl={isUrl} src={team.logo} initials={initials} />}
+    </div>
+  );
+};
+
+const Logo: FC<{ isUrl: boolean; src: string; initials: string }> = ({
+  isUrl,
+  src,
+  initials,
+}) => {
+  if (!isUrl) return <span className="text-3xl">{src}</span>;
+
+  return (
+    <div className="w-10 h-10 shrink-0 relative">
+      <img
+        src={src}
+        alt={initials}
+        className="w-10 h-10 object-contain absolute inset-0"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = "none";
+          (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+        }}
+      />
+      <div className="hidden w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-sm font-bold text-muted-foreground">
+        {initials}
+      </div>
     </div>
   );
 };

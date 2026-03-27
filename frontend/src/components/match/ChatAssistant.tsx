@@ -48,7 +48,7 @@ const ChatPanel: FC<ChatPanelProps> = ({
   scrollRef,
 }) => (
   <div
-    className={`fixed bottom-20 right-4 z-50 w-[340px] max-h-[520px] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
+    className={`fixed bottom-20 right-4 z-50 w-[360px] max-h-[560px] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
       isOpen
         ? "scale-100 opacity-100 pointer-events-auto"
         : "scale-90 opacity-0 pointer-events-none"
@@ -122,26 +122,124 @@ const ChatPanel: FC<ChatPanelProps> = ({
   </div>
 );
 
-// ─── Sub-componentes menores ─────────────────────────────────────────
+// ─── Bolha de mensagem ───────────────────────────────────────────────
 
 const MessageBubble: FC<{ role: string; content: string }> = ({
   role,
   content,
-}) => (
-  <div
-    className={`flex ${role === "user" ? "justify-end" : "justify-start"}`}
-  >
-    <div
-      className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
-        role === "user"
-          ? "bg-primary text-primary-foreground rounded-br-sm"
-          : "bg-secondary text-secondary-foreground rounded-bl-sm"
-      }`}
-    >
-      <FormattedText content={content} />
+}) => {
+  const isUser = role === "user";
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[90%] rounded-xl text-xs leading-relaxed ${
+          isUser
+            ? "bg-primary text-primary-foreground rounded-br-sm px-3 py-2"
+            : "bg-secondary text-secondary-foreground rounded-bl-sm px-3 py-2.5"
+        }`}
+      >
+        {isUser ? (
+          <span>{content}</span>
+        ) : (
+          <FormattedMessage content={content} />
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+// ─── Renderizador de markdown do assistente ──────────────────────────
+
+const FormattedMessage: FC<{ content: string }> = ({ content }) => {
+  // Divide por blocos de linha dupla (parágrafos) ou separadores
+  const blocks = content.split(/\n{2,}|\n(?=[-•●])|(?<=\|)\s*\n/);
+
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, i) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        // Separador visual (--- ou ___)
+        if (/^[-_]{3,}$/.test(trimmed)) {
+          return <hr key={i} className="border-border/50 my-1" />;
+        }
+
+        // Checa se é bloco de lista (múltiplas linhas começando com - ou • ou |)
+        const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+        const isList = lines.length > 1 && lines.every((l) => /^[-•●|▶➡]/.test(l));
+
+        if (isList) {
+          return (
+            <div key={i} className="space-y-1 pl-1">
+              {lines.map((line, j) => (
+                <div key={j} className="flex gap-1.5 items-start">
+                  <span className="text-primary mt-0.5 shrink-0">•</span>
+                  <span><InlineFormat text={line.replace(/^[-•●|▶➡]\s*/, "")} /></span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        // Bloco com | separadores (tipo tabela inline: "Casa 1.010 | Empate 26.000")
+        if (trimmed.includes(" | ")) {
+          const parts = trimmed.split(" | ");
+          return (
+            <div key={i} className="flex flex-wrap gap-1.5">
+              {parts.map((part, j) => (
+                <span
+                  key={j}
+                  className="bg-background/40 text-[10px] font-mono-data px-2 py-1 rounded border border-border/30"
+                >
+                  <InlineFormat text={part.trim()} />
+                </span>
+              ))}
+            </div>
+          );
+        }
+
+        // Parágrafo normal (pode ter \n simples dentro)
+        return (
+          <p key={i}>
+            {trimmed.split("\n").map((line, j, arr) => (
+              <span key={j}>
+                <InlineFormat text={line.trim()} />
+                {j < arr.length - 1 && <br />}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Formatação inline: **bold**, números, odds ──────────────────────
+
+const InlineFormat: FC<{ text: string }> = ({ text }) => {
+  // Regex: **bold**, números com ponto (odds), e texto normal
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        // **bold**
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={i} className="font-semibold text-foreground">
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+};
+
+// ─── Indicador de digitação ──────────────────────────────────────────
 
 const TypingIndicator: FC = () => (
   <div className="flex justify-start">
@@ -159,6 +257,8 @@ const TypingIndicator: FC = () => (
   </div>
 );
 
+// ─── Botão flutuante ─────────────────────────────────────────────────
+
 const FloatingButton: FC<{
   isOpen: boolean;
   onToggle: () => void;
@@ -174,23 +274,5 @@ const FloatingButton: FC<{
     {isOpen ? <X size={22} /> : <MessageCircle size={22} />}
   </button>
 );
-
-/** Renderiza **bold** simples em markdown */
-const FormattedText: FC<{ content: string }> = ({ content }) => {
-  const parts = content.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith("**") && part.endsWith("**") ? (
-          <strong key={i} className="font-semibold">
-            {part.slice(2, -2)}
-          </strong>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </>
-  );
-};
 
 export default ChatAssistant;

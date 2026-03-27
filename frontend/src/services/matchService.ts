@@ -66,7 +66,7 @@ function convertBetsApiToMatchState(data: any): MatchState | null {
 
     const timer = event.timer;
     const minute = timer ? `${timer.tm}:${String(timer.ts ?? 0).padStart(2, "0")}` : "0";
-    const half = timer?.tt === "0" ? "1º Tempo" : timer?.tt === "1" ? "2º Tempo" : "";
+    const half = timer?.tt === "1" ? "1º Tempo" : timer?.tt === "2" ? "2º Tempo" : "";
     const isLive = event.time_status === "1";
 
     const stats = event.stats ?? {};
@@ -97,13 +97,17 @@ function convertBetsApiToMatchState(data: any): MatchState | null {
         home: {
           name: event.home?.name ?? "Casa",
           shortName: (event.home?.name ?? "CAS").substring(0, 3).toUpperCase(),
-          logo: "🏠",
+          logo: event.home?.image_id
+            ? `https://assets.b365api.com/images/team/m/${event.home.image_id}.png`
+            : "🏠",
           score: homeScore,
         },
         away: {
           name: event.away?.name ?? "Fora",
           shortName: (event.away?.name ?? "FOR").substring(0, 3).toUpperCase(),
-          logo: "✈️",
+          logo: event.away?.image_id
+            ? `https://assets.b365api.com/images/team/m/${event.away.image_id}.png`
+            : "✈️",
           score: awayScore,
         },
         minute,
