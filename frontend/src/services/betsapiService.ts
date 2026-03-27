@@ -92,6 +92,23 @@ export async function fetchInplayEvents(): Promise<BetsApiEvent[]> {
   }
 }
 
+export async function fetchUpcomingEvents(
+  day?: string,
+  page = 1,
+  cc?: string,
+): Promise<{ events: BetsApiEvent[]; total: number }> {
+  try {
+    const params = new URLSearchParams({ page: String(page) });
+    if (day) params.set("day", day);
+    if (cc) params.set("cc", cc);
+    const data = await api.get<BetsApiResponse>(`/betsapi/upcoming?${params.toString()}`);
+    return { events: data.results || [], total: data.pager?.total ?? 0 };
+  } catch (error) {
+    console.warn("⚠️ Falha ao buscar próximos jogos:", error);
+    return { events: [], total: 0 };
+  }
+}
+
 export async function fetchEndedEvents(
   day: string,
   page = 1,
@@ -209,6 +226,19 @@ export function getLastNDays(n: number): { label: string; day: string }[] {
   return days;
 }
 
+export function getNextNDays(n: number): { label: string; day: string }[] {
+  const days: { label: string; day: string }[] = [];
+  const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  for (let i = 0; i < n; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() + i);
+    const label =
+      i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${weekdays[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+    days.push({ label, day: formatDay(date) });
+  }
+  return days;
+}
+
 export function formatTime(unixTimestamp: string): string {
   const date = new Date(Number(unixTimestamp) * 1000);
   return date.toLocaleTimeString("pt-BR", {
@@ -216,6 +246,35 @@ export function formatTime(unixTimestamp: string): string {
     minute: "2-digit",
     timeZone: "America/Recife",
   });
+}
+
+export function formatDateTime(unixTimestamp: string): string {
+  const date = new Date(Number(unixTimestamp) * 1000);
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Recife",
+  });
+}
+
+export function formatTimeUntil(unixTimestamp: string): string {
+  const now = Date.now();
+  const target = Number(unixTimestamp) * 1000;
+  const diff = target - now;
+
+  if (diff <= 0) return "Em breve";
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 24) {
+    const days = Math.floor(hours / 24);
+    return `em ${days}d`;
+  }
+  if (hours > 0) return `em ${hours}h${minutes > 0 ? `${minutes}min` : ""}`;
+  return `em ${minutes}min`;
 }
 
 export function teamLogoUrl(imageId?: string | null): string {

@@ -1,57 +1,24 @@
 import { FC, useEffect, useRef, useMemo } from "react";
-import type { EventHeatPoint } from "@/hooks/useTimelineHeatPoints";
 
+// Types matching the existing HeatPoint interface
 interface HeatPoint {
-  x: number;
-  y: number;
-  intensity: number;
+  x: number; // 0-100
+  y: number; // 0-100
+  intensity: number; // 0-1
 }
 
 interface HeatMap3DProps {
   points: HeatPoint[];
-  eventPoints?: EventHeatPoint[];
   title?: string;
   homeLabel?: string;
   awayLabel?: string;
-  currentMinute?: string;
 }
 
+// ─── Field dimensions ────────────────────────────────────────────────
 const FIELD_X = 100;
 const FIELD_Y = 60;
 
-// ─── Event type → marker config ──────────────────────────────────────
-
-const EVENT_MARKER_COLORS: Record<string, string> = {
-  goal: "rgb(255, 215, 0)",
-  shot: "rgb(255, 100, 50)",
-  save: "rgb(0, 200, 255)",
-  corner: "rgb(180, 180, 255)",
-  yellow: "rgb(255, 230, 0)",
-  red: "rgb(255, 30, 30)",
-  substitution: "rgb(150, 255, 150)",
-};
-
-const EVENT_MARKER_SIZES: Record<string, number> = {
-  goal: 22,
-  shot: 14,
-  save: 14,
-  corner: 10,
-  yellow: 12,
-  red: 16,
-  substitution: 8,
-};
-
-const EVENT_SYMBOLS: Record<string, string> = {
-  goal: "diamond",
-  shot: "circle",
-  save: "square",
-  corner: "cross",
-  yellow: "square",
-  red: "square",
-  substitution: "circle",
-};
-
-// ─── Build pressure grid ─────────────────────────────────────────────
+// ─── Build pressure grid from heat points ────────────────────────────
 
 function buildPressureGrid(points: HeatPoint[]) {
   const zPlane: number[][] = [];
@@ -61,11 +28,14 @@ function buildPressureGrid(points: HeatPoint[]) {
     const zRow: number[] = [];
     const cRow: number[] = [];
     for (let x = 0; x < FIELD_X; x++) {
-      zRow.push(0);
+      zRow.push(0); // flat surface
+
+      // Sum gaussian influence from each heat point
       let pressure = 0;
       for (const p of points) {
+        // Map point.y (0-100) → field Y (0-60)
         const py = (p.y / 100) * FIELD_Y;
-        const px = p.x;
+        const px = p.x; // already 0-100
         const dist2 = (x - px) ** 2 + (y - py) ** 2;
         const sigma = 120 + p.intensity * 80;
         pressure += p.intensity * 20 * Math.exp(-dist2 / sigma);
@@ -79,12 +49,17 @@ function buildPressureGrid(points: HeatPoint[]) {
   return { zPlane, colorGrid };
 }
 
-// ─── Build field lines ───────────────────────────────────────────────
+// ─── Build field line traces ─────────────────────────────────────────
 
-function makeLine(x: number[], y: number[]): Record<string, unknown> {
+function makeLine(
+  x: number[],
+  y: number[],
+  z?: number[],
+): Record<string, unknown> {
   return {
-    x, y,
-    z: Array(x.length).fill(0.2),
+    x,
+    y,
+    z: z ?? Array(x.length).fill(0.2),
     type: "scatter3d",
     mode: "lines",
     line: { color: "rgba(255,255,255,0.7)", width: 3 },
@@ -96,13 +71,19 @@ function makeLine(x: number[], y: number[]): Record<string, unknown> {
 function buildFieldLines(): Record<string, unknown>[] {
   const lines: Record<string, unknown>[] = [];
 
+  // Border + center line
   lines.push(makeLine([0, 100, 100, 0, 0], [0, 0, 60, 60, 0]));
   lines.push(makeLine([50, 50], [0, 60]));
+
+  // Penalty areas (defense)
   lines.push(makeLine([0, 16.5, 16.5, 0], [13.8, 13.8, 46.2, 46.2]));
   lines.push(makeLine([0, 5.5, 5.5, 0], [24.8, 24.8, 35.2, 35.2]));
+
+  // Penalty areas (attack)
   lines.push(makeLine([100, 83.5, 83.5, 100], [13.8, 13.8, 46.2, 46.2]));
   lines.push(makeLine([100, 94.5, 94.5, 100], [24.8, 24.8, 35.2, 35.2]));
 
+  // Center circle
   const cx: number[] = [];
   const cy: number[] = [];
   for (let i = 0; i <= 360; i += 5) {
@@ -111,13 +92,15 @@ function buildFieldLines(): Record<string, unknown>[] {
   }
   lines.push(makeLine(cx, cy));
 
+  // Corner arcs
   const r = 2;
-  for (const c of [
+  const corners = [
     { ox: 0, oy: 0, sx: 1, sy: 1 },
     { ox: 0, oy: 60, sx: 1, sy: -1 },
     { ox: 100, oy: 0, sx: -1, sy: 1 },
     { ox: 100, oy: 60, sx: -1, sy: -1 },
-  ]) {
+  ];
+  for (const c of corners) {
     const ax: number[] = [];
     const ay: number[] = [];
     for (let i = 0; i <= 90; i += 5) {
@@ -131,89 +114,24 @@ function buildFieldLines(): Record<string, unknown>[] {
   return lines;
 }
 
-// ─── Build event markers ─────────────────────────────────────────────
-
-function buildEventMarkers(events: EventHeatPoint[]): Record<string, unknown>[] {
-  if (events.length === 0) return [];
-
-  const traces: Record<string, unknown>[] = [];
-
-  for (const ev of events) {
-    const py = (ev.y / 100) * FIELD_Y;
-    const opacity = Math.max(0.3, 1 - ev.age * 0.7);
-    const size = (EVENT_MARKER_SIZES[ev.eventType] ?? 12) * (1 - ev.age * 0.3);
-    const color = EVENT_MARKER_COLORS[ev.eventType] ?? "rgb(255,255,255)";
-    const symbol = EVENT_SYMBOLS[ev.eventType] ?? "circle";
-
-    // Main marker floating above the field
-    traces.push({
-      x: [ev.x],
-      y: [py],
-      z: [0.5],
-      type: "scatter3d",
-      mode: "markers+text",
-      marker: {
-        size,
-        color,
-        opacity,
-        symbol,
-        line: { color: "white", width: 1 },
-      },
-      text: [ev.label],
-      textposition: "top center",
-      textfont: {
-        size: 9,
-        color: `rgba(255,255,255,${opacity})`,
-        family: "JetBrains Mono, monospace",
-      },
-      hoverinfo: "text",
-      hovertext: [ev.label],
-      showlegend: false,
-    });
-
-    // Pulse ring for fresh events
-    if (ev.age < 0.3) {
-      traces.push({
-        x: [ev.x],
-        y: [py],
-        z: [0.3],
-        type: "scatter3d",
-        mode: "markers",
-        marker: {
-          size: size * 2.5 * (1 + ev.age * 2),
-          color: "rgba(0,0,0,0)",
-          opacity: 0.4 * (1 - ev.age / 0.3),
-          line: { color, width: 2 },
-        },
-        hoverinfo: "none",
-        showlegend: false,
-      });
-    }
-  }
-
-  return traces;
-}
-
 // ─── Component ───────────────────────────────────────────────────────
 
 const HeatMap3D: FC<HeatMap3DProps> = ({
   points,
-  eventPoints = [],
   title = "Mapa de Calor 3D",
   homeLabel,
   awayLabel,
-  currentMinute,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { zPlane, colorGrid } = useMemo(() => buildPressureGrid(points), [points]);
   const fieldLines = useMemo(() => buildFieldLines(), []);
-  const eventMarkers = useMemo(() => buildEventMarkers(eventPoints), [eventPoints]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    // Dynamically load Plotly from CDN
     const plotlyUrl = "https://cdn.plot.ly/plotly-2.27.0.min.js";
     const existing = document.querySelector(`script[src="${plotlyUrl}"]`);
 
@@ -237,7 +155,7 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
         hoverinfo: "none",
       };
 
-      const data = [surface, ...fieldLines, ...eventMarkers];
+      const data = [surface, ...fieldLines];
 
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)",
@@ -246,6 +164,7 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
         scene: {
           xaxis: {
             title: "",
+            color: "rgba(255,255,255,0.5)",
             showgrid: false,
             zeroline: false,
             showticklabels: false,
@@ -253,6 +172,7 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
           },
           yaxis: {
             title: "",
+            color: "rgba(255,255,255,0.5)",
             showgrid: false,
             zeroline: false,
             showticklabels: false,
@@ -263,11 +183,13 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
             showgrid: false,
             showticklabels: false,
             zeroline: false,
-            range: [-1, 3],
+            range: [-1, 2],
           },
           aspectmode: "manual",
           aspectratio: { x: 2, y: 1.2, z: 0.08 },
-          camera: { eye: { x: -0.4, y: -1.0, z: 1.6 } },
+          camera: {
+            eye: { x: -0.4, y: -1.0, z: 1.6 },
+          },
           bgcolor: "rgba(0,0,0,0)",
         },
       };
@@ -278,12 +200,7 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
         scrollZoom: true,
       };
 
-      if ((el as any)._plotlyInit) {
-        Plotly.react(el, data, layout, config);
-      } else {
-        Plotly.newPlot(el, data, layout, config);
-        (el as any)._plotlyInit = true;
-      }
+      Plotly.newPlot(el, data, layout, config);
     }
 
     if (existing && (window as any).Plotly) {
@@ -297,74 +214,61 @@ const HeatMap3D: FC<HeatMap3DProps> = ({
     } else {
       existing.addEventListener("load", render);
     }
-  }, [zPlane, colorGrid, fieldLines, eventMarkers]);
 
-  // Cleanup on unmount only
-  useEffect(() => {
-    const el = containerRef.current;
     return () => {
       const Plotly = (window as any).Plotly;
       if (Plotly && el) {
-        try { Plotly.purge(el); (el as any)._plotlyInit = false; } catch {}
+        try {
+          Plotly.purge(el);
+        } catch {}
       }
     };
-  }, []);
-
-  const activeCount = eventPoints.length;
+  }, [zPlane, colorGrid, fieldLines]);
 
   return (
     <div className="bg-card rounded-lg border border-border overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          {activeCount > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-live-pulse bg-live-pulse/10 px-2 py-0.5 rounded-full animate-live-dot">
-              {activeCount} {activeCount === 1 ? "evento" : "eventos"}
-            </span>
-          )}
-        </div>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <div className="flex items-center gap-3">
-          {currentMinute && (
-            <span className="text-[10px] font-mono-data text-muted-foreground">{currentMinute}</span>
-          )}
           {homeLabel && (
             <span className="text-xs font-medium text-primary px-2 py-0.5 rounded bg-primary/10">
-              ← {homeLabel}
+              {homeLabel}
             </span>
           )}
           {awayLabel && (
             <span className="text-xs font-medium text-accent px-2 py-0.5 rounded bg-accent/10">
-              {awayLabel} →
+              {awayLabel}
             </span>
           )}
         </div>
       </div>
 
-      {/* 3D Field */}
+      {/* 3D Canvas */}
       <div
         ref={containerRef}
         className="w-full"
         style={{ height: "420px", background: "hsl(228, 50%, 7%)" }}
       />
 
-      {/* Legend */}
+      {/* Legend + hint */}
       <div className="flex items-center justify-between px-4 py-2 border-t border-border">
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-5">
           {[
-            { label: "Gol", color: "bg-yellow-400" },
-            { label: "Chute", color: "bg-orange-500" },
-            { label: "Defesa", color: "bg-cyan-400" },
-            { label: "Cartão", color: "bg-red-500" },
-            { label: "Escanteio", color: "bg-purple-300" },
+            { label: "Baixa", color: "bg-green-600" },
+            { label: "Média", color: "bg-yellow-400" },
+            { label: "Alta", color: "bg-orange-500" },
+            { label: "Máxima", color: "bg-red-600" },
           ].map((l) => (
             <div key={l.label} className="flex items-center gap-1.5">
-              <span className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
-              <span className="text-[10px] text-muted-foreground">{l.label}</span>
+              <span className={`w-3 h-3 rounded-sm ${l.color}`} />
+              <span className="text-xs text-muted-foreground">{l.label}</span>
             </div>
           ))}
         </div>
-        <span className="text-[10px] text-muted-foreground italic">Arraste para girar</span>
+        <span className="text-[10px] text-muted-foreground italic">
+          Arraste para girar o campo
+        </span>
       </div>
     </div>
   );

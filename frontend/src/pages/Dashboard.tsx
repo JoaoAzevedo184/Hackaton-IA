@@ -4,8 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchInplayEvents,
   fetchEndedEvents,
+  fetchUpcomingEvents,
   getLastNDays,
+  getNextNDays,
   formatTime,
+  formatTimeUntil,
   teamLogoUrl,
   flagUrl,
   isEsports,
@@ -22,14 +25,20 @@ const REFETCH_LIVE_MS = 30_000;
 const DAYS_TO_SHOW = 3;
 
 const Dashboard = () => {
-  const days = getLastNDays(DAYS_TO_SHOW);
+  const pastDays = getLastNDays(DAYS_TO_SHOW);
+  const futureDays = getNextNDays(DAYS_TO_SHOW);
 
   // ─── Filtros ─────────────────────────────────────────────────────
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [hideEsports, setHideEsports] = useState(true);
-  const [selectedDay, setSelectedDay] = useState(days[0].day);
+  const [selectedDay, setSelectedDay] = useState(pastDays[0].day);
   const [endedPage, setEndedPage] = useState(1);
   const [endedCountry, setEndedCountry] = useState<string | null>(null);
+
+  // Upcoming filters
+  const [upcomingDay, setUpcomingDay] = useState(futureDays[0].day);
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [upcomingCountry, setUpcomingCountry] = useState<string | null>(null);
 
   // ─── Queries ─────────────────────────────────────────────────────
   const {
@@ -44,6 +53,15 @@ const Dashboard = () => {
   });
 
   const {
+    data: upcomingData,
+    isLoading: upcomingLoading,
+    error: upcomingError,
+  } = useQuery({
+    queryKey: ["betsapi", "upcoming", upcomingDay, upcomingPage, upcomingCountry],
+    queryFn: () => fetchUpcomingEvents(upcomingDay, upcomingPage, upcomingCountry ?? undefined),
+  });
+
+  const {
     data: endedData,
     isLoading: endedLoading,
     error: endedError,
@@ -53,6 +71,7 @@ const Dashboard = () => {
   });
 
   useEffect(() => setEndedPage(1), [selectedDay, endedCountry]);
+  useEffect(() => setUpcomingPage(1), [upcomingDay, upcomingCountry]);
 
   // ─── Filtrar ao vivo ─────────────────────────────────────────────
   const liveEvents = useMemo(() => {
@@ -69,6 +88,12 @@ const Dashboard = () => {
 
   const endedEvents = endedData?.events ?? [];
   const endedTotal = endedData?.total ?? 0;
+
+  const upcomingEvents = useMemo(() => {
+    const events = upcomingData?.events ?? [];
+    return events.filter((e) => e.sport_id === "1" && !isEsports(e));
+  }, [upcomingData]);
+  const upcomingTotal = upcomingData?.total ?? 0;
 
   const lastUpdate = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -164,6 +189,89 @@ const Dashboard = () => {
         </section>
 
         {/* ═══════════════════════════════════════════════════════════ */}
+        {/* SEÇÃO: PRÓXIMOS JOGOS                                     */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-lg">📅</span>
+            <h2 className="text-lg font-bold text-foreground">Próximos Jogos</h2>
+            {upcomingTotal > 0 && (
+              <span className="text-xs font-mono-data text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                {upcomingTotal}
+              </span>
+            )}
+          </div>
+
+          {/* Tabs de dia + filtro país */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {futureDays.map((d) => (
+              <button
+                key={d.day}
+                onClick={() => setUpcomingDay(d.day)}
+                className={`text-xs font-semibold px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
+                  upcomingDay === d.day
+                    ? "bg-accent text-accent-foreground shadow-[0_0_12px_hsla(200,80%,55%,0.2)]"
+                    : "bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+
+            <span className="text-border mx-1">|</span>
+
+            <select
+              value={upcomingCountry ?? ""}
+              onChange={(e) => setUpcomingCountry(e.target.value || null)}
+              className="text-xs bg-secondary/60 text-foreground rounded-lg px-3 py-2 border border-border/30 outline-none focus:border-accent/40 transition-colors"
+            >
+              <option value="">Todos os países</option>
+              {Object.entries(COUNTRY_OPTIONS).map(([code, name]) => (
+                <option key={code} value={code}>{name}</option>
+              ))}
+            </select>
+          </div>
+
+          {upcomingLoading ? (
+            <LoadingGrid count={6} />
+          ) : upcomingError ? (
+            <ErrorBox message="Não foi possível carregar próximos jogos." />
+          ) : upcomingEvents.length === 0 ? (
+            <EmptyState icon="📅" text="Nenhum jogo agendado para este dia." subtext="Selecione outro dia para ver mais jogos." />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {upcomingEvents.map((event) => (
+                  <UpcomingMatchCard key={event.id} event={event} />
+                ))}
+              </div>
+
+              {upcomingTotal > 50 && (
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <button
+                    onClick={() => setUpcomingPage((p) => Math.max(1, p - 1))}
+                    disabled={upcomingPage <= 1}
+                    className="text-xs font-medium px-4 py-2 rounded-lg bg-secondary text-foreground disabled:opacity-30 hover:bg-secondary/80"
+                  >
+                    ← Anterior
+                  </button>
+                  <span className="text-xs font-mono-data text-muted-foreground">
+                    Página {upcomingPage} de {Math.ceil(upcomingTotal / 50)}
+                  </span>
+                  <button
+                    onClick={() => setUpcomingPage((p) => p + 1)}
+                    disabled={upcomingEvents.length < 50}
+                    className="text-xs font-medium px-4 py-2 rounded-lg bg-secondary text-foreground disabled:opacity-30 hover:bg-secondary/80"
+                  >
+                    Próxima →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
         {/* SEÇÃO: RESULTADOS                                         */}
         {/* ═══════════════════════════════════════════════════════════ */}
         <section>
@@ -178,7 +286,7 @@ const Dashboard = () => {
 
           {/* Tabs de dia + filtro país */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            {days.map((d) => (
+            {pastDays.map((d) => (
               <button
                 key={d.day}
                 onClick={() => setSelectedDay(d.day)}
@@ -265,7 +373,6 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
 
   return (
     <div className="bg-card rounded-lg border border-primary/15 overflow-hidden shadow-[0_0_20px_hsla(142,72%,48%,0.04)] transition-all hover:border-primary/25">
-      {/* Header: Liga + Timer — clicável para ir ao detalhe */}
       <Link
         to={`/match/${event.id}`}
         className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-secondary/10 hover:bg-secondary/20 transition-colors"
@@ -287,7 +394,6 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
         </div>
       </Link>
 
-      {/* Placar — clicável para ir ao detalhe */}
       <Link to={`/match/${event.id}`} className="block px-4 py-3 hover:bg-secondary/5 transition-colors">
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
@@ -335,7 +441,6 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
         )}
       </Link>
 
-      {/* Botão expandir stats */}
       {stats && (
         <>
           <button
@@ -348,6 +453,53 @@ const LiveMatchCard = ({ event }: { event: BetsApiEvent }) => {
         </>
       )}
     </div>
+  );
+};
+
+// ─── Card de jogo QUE VAI ACONTECER ──────────────────────────────────
+
+const UpcomingMatchCard = ({ event }: { event: BetsApiEvent }) => {
+  const kickoff = formatTime(event.time);
+  const countdown = formatTimeUntil(event.time);
+
+  return (
+    <Link
+      to={`/match/${event.id}`}
+      className="block bg-card rounded-lg border border-accent/15 overflow-hidden hover:border-accent/30 hover:shadow-[0_0_16px_hsla(200,80%,55%,0.08)] transition-all"
+    >
+      {/* Header: Liga + Horário */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 bg-accent/5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Flag cc={event.league.cc} />
+          <span className="text-[10px] text-muted-foreground truncate">{event.league.name}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+            {countdown}
+          </span>
+        </div>
+      </div>
+
+      {/* Times */}
+      <div className="px-3 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <TeamRowCompact name={event.home.name} imageId={event.home.image_id} />
+          <span className="text-[10px] font-mono-data text-muted-foreground">vs</span>
+          <TeamRowCompact name={event.away.name} imageId={event.away.image_id} reverse />
+        </div>
+      </div>
+
+      {/* Footer: Horário */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border/20 bg-secondary/10">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px]">⏰</span>
+          <span className="text-[10px] font-semibold font-mono-data text-foreground">{kickoff}</span>
+        </div>
+        <span className="text-[9px] font-semibold text-accent uppercase tracking-wider">
+          Agendado
+        </span>
+      </div>
+    </Link>
   );
 };
 
@@ -520,8 +672,8 @@ const TeamRow = ({
   </div>
 );
 
-const TeamRowCompact = ({ name, imageId }: { name: string; imageId?: string | null }) => (
-  <div className="flex items-center gap-2 min-w-0">
+const TeamRowCompact = ({ name, imageId, reverse }: { name: string; imageId?: string | null; reverse?: boolean }) => (
+  <div className={`flex items-center gap-2 min-w-0 ${reverse ? "flex-row-reverse" : ""}`}>
     <TeamLogo imageId={imageId} size="sm" />
     <span className="text-xs text-foreground truncate">{name}</span>
   </div>

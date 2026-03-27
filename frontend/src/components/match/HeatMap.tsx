@@ -2,6 +2,7 @@ import { FC, useRef, useEffect } from "react";
 import type { HeatPoint } from "@/types";
 import { drawPitch, drawHeatPoints } from "@/lib/pitchRenderer";
 
+
 interface HeatMapProps {
   points: HeatPoint[];
   title?: string;
