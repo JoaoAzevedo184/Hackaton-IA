@@ -4,7 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/Dashboard";
-import MatchDetail from "../src/pages/MatchDetail";
+import MatchDetail from "@/pages/MatchDetail";
+import MatchOdds from "@/pages/MatchOdds";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/match/:matchId" element={<MatchDetail />} />
+          <Route path="/match/:matchId/odds" element={<MatchOdds />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

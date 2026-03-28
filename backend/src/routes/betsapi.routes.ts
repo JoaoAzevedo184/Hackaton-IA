@@ -12,11 +12,10 @@ const SPORT_SOCCER = "1";
 betsapiRoutes.get("/inplay", async (_req: Request, res: Response) => {
   try {
     const url = `${BETSAPI_BASE_V3}/events/inplay?sport_id=${SPORT_SOCCER}&token=${BETSAPI_TOKEN}`;
-    const data = await fetchBetsApi(url);
-    res.json(data);
+    res.json(await fetchBetsApi(url));
   } catch (error) {
     console.error("Erro ao buscar jogos ao vivo:", error);
-    res.status(502).json({ error: "Falha ao buscar jogos ao vivo da BetsAPI" });
+    res.status(502).json({ error: "Falha ao buscar jogos ao vivo" });
   }
 });
 
@@ -30,12 +29,10 @@ betsapiRoutes.get("/upcoming", async (req: Request, res: Response) => {
     if (day) params.set("day", String(day));
     if (cc) params.set("cc", String(cc));
     if (league_id) params.set("league_id", String(league_id));
-    const url = `${BETSAPI_BASE_V3}/events/upcoming?${params.toString()}`;
-    const data = await fetchBetsApi(url);
-    res.json(data);
+    res.json(await fetchBetsApi(`${BETSAPI_BASE_V3}/events/upcoming?${params}`));
   } catch (error) {
     console.error("Erro ao buscar próximos jogos:", error);
-    res.status(502).json({ error: "Falha ao buscar próximos jogos da BetsAPI" });
+    res.status(502).json({ error: "Falha ao buscar próximos jogos" });
   }
 });
 
@@ -49,12 +46,10 @@ betsapiRoutes.get("/ended", async (req: Request, res: Response) => {
     if (page) params.set("page", String(page));
     if (cc) params.set("cc", String(cc));
     if (league_id) params.set("league_id", String(league_id));
-    const url = `${BETSAPI_BASE_V3}/events/ended?${params.toString()}`;
-    const data = await fetchBetsApi(url);
-    res.json(data);
+    res.json(await fetchBetsApi(`${BETSAPI_BASE_V3}/events/ended?${params}`));
   } catch (error) {
     console.error("Erro ao buscar jogos encerrados:", error);
-    res.status(502).json({ error: "Falha ao buscar jogos encerrados da BetsAPI" });
+    res.status(502).json({ error: "Falha ao buscar jogos encerrados" });
   }
 });
 
@@ -62,25 +57,33 @@ betsapiRoutes.get("/ended", async (req: Request, res: Response) => {
 
 betsapiRoutes.get("/event/:id", async (req: Request, res: Response) => {
   try {
-    const url = `${BETSAPI_BASE_V3}/event/view?event_id=${req.params.id}&token=${BETSAPI_TOKEN}`;
-    const data = await fetchBetsApi(url);
-    res.json(data);
+    res.json(await fetchBetsApi(`${BETSAPI_BASE_V3}/event/view?event_id=${req.params.id}&token=${BETSAPI_TOKEN}`));
   } catch (error) {
     console.error("Erro ao buscar evento:", error);
     res.status(502).json({ error: "Falha ao buscar detalhes do evento" });
   }
 });
 
-// ─── GET /api/betsapi/lineup/:id — Escalação do jogo ─────────────────
+// ─── GET /api/betsapi/lineup/:id ─────────────────────────────────────
 
 betsapiRoutes.get("/lineup/:id", async (req: Request, res: Response) => {
   try {
-    const url = `${BETSAPI_BASE_V1}/event/lineup?event_id=${req.params.id}&token=${BETSAPI_TOKEN}`;
-    const data = await fetchBetsApi(url);
-    res.json(data);
+    res.json(await fetchBetsApi(`${BETSAPI_BASE_V1}/event/lineup?event_id=${req.params.id}&token=${BETSAPI_TOKEN}`));
   } catch (error) {
     console.error("Erro ao buscar escalação:", error);
-    res.status(502).json({ error: "Falha ao buscar escalação da BetsAPI" });
+    res.status(502).json({ error: "Falha ao buscar escalação" });
+  }
+});
+
+// ─── GET /api/betsapi/odds/:id — Odds do jogo ───────────────────────
+
+betsapiRoutes.get("/odds/:id", async (req: Request, res: Response) => {
+  try {
+    const url = `${BETSAPI_BASE_V1}/event/odds?event_id=${req.params.id}&token=${BETSAPI_TOKEN}`;
+    res.json(await fetchBetsApi(url));
+  } catch (error) {
+    console.error("Erro ao buscar odds:", error);
+    res.status(502).json({ error: "Falha ao buscar odds" });
   }
 });
 
@@ -88,12 +91,8 @@ betsapiRoutes.get("/lineup/:id", async (req: Request, res: Response) => {
 
 async function fetchBetsApi(url: string): Promise<unknown> {
   const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`BetsAPI retornou ${response.status}: ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(`BetsAPI retornou ${response.status}: ${response.statusText}`);
   const data = await response.json();
-  if (data.success === 0) {
-    throw new Error(`BetsAPI erro: ${data.error || "unknown"}`);
-  }
+  if (data.success === 0) throw new Error(`BetsAPI erro: ${data.error || "unknown"}`);
   return data;
 }
