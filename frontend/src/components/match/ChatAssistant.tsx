@@ -48,7 +48,7 @@ const ChatPanel: FC<ChatPanelProps> = ({
   scrollRef,
 }) => (
   <div
-    className={`fixed bottom-20 right-4 z-50 w-[420px] max-h-[640px] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
+    className={`fixed bottom-20 right-4 z-50 w-[480px] max-h-[85vh] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
       isOpen
         ? "scale-100 opacity-100 pointer-events-auto"
         : "scale-90 opacity-0 pointer-events-none"
@@ -79,7 +79,7 @@ const ChatPanel: FC<ChatPanelProps> = ({
     {/* Messages */}
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0"
+      className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[600px]"
     >
       {messages.map((msg, i) => (
         <MessageBubble key={i} role={msg.role} content={msg.content} />
