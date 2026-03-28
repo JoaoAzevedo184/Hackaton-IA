@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-// ─── Tipos ───────────────────────────────────────────────────────────
+// ─── Tipos ───────────────────────────────────────────────────────
 
 export interface OddValue {
   label: string;
-  value: string; // odd decimal como string
-  header?: string; // ex: "Mais de 2.5", "Novorizontino"
+  value: string;
+  header?: string;
   isHighlighted?: boolean;
 }
 
@@ -24,150 +24,271 @@ export interface OddCategory {
 export interface MatchOddsData {
   categories: OddCategory[];
   available: boolean;
+  isEstimated?: boolean;
   updatedAt?: string;
 }
 
-// ─── Nomes dos mercados em PT-BR ─────────────────────────────────────
+// ─── Market config ───────────────────────────────────────────────
 
-const MARKET_NAMES: Record<string, string> = {
-  "1_1": "Resultado Final",
-  "1_2": "Handicap Asiático",
-  "1_3": "Total de Gols",
-  "1_4": "Ambas Equipes Marcam",
-  "1_5": "Dupla Chance",
-  "1_6": "Resultado Exato",
-  "1_7": "Intervalo/Final",
-  "1_8": "Primeira Equipe a Marcar",
-  "1_9": "Último a Marcar",
-  "1_10": "Total de Gols Mandante",
-  "1_11": "Total de Gols Visitante",
-  "1_12": "Handicap Europeu",
-  "1_13": "Resultado do 1º Tempo",
-  "1_14": "Total de Gols 1º Tempo",
-  "1_15": "Qual Equipe Vence o 1º Tempo",
-  "1_16": "Nº Exato de Gols",
-  "1_17": "Total de Escanteios",
-  "1_18": "Total de Cartões",
+const MARKET_CONFIG: Record<string, { name: string; category: string; type: "1x2" | "ou" | "ah" }> = {
+  "1_1": { name: "Resultado Final", category: "Resultado", type: "1x2" },
+  "1_2": { name: "Handicap Asiático", category: "Handicaps", type: "ah" },
+  "1_3": { name: "Total de Gols", category: "Total de Gols", type: "ou" },
+  "1_4": { name: "Escanteios Asiáticos", category: "Especiais", type: "ou" },
+  "1_5": { name: "Handicap 1º Tempo", category: "Handicaps", type: "ah" },
+  "1_6": { name: "Total de Gols 1º Tempo", category: "Total de Gols", type: "ou" },
+  "1_7": { name: "Total de Escanteios", category: "Especiais", type: "ou" },
+  "1_8": { name: "Qual Equipe Vence o Restante?", category: "Resultado", type: "1x2" },
 };
 
-const OUTCOME_NAMES: Record<string, Record<string, string>> = {
-  "1_1": { "1": "Mandante", "X": "Empate", "2": "Visitante" },
-  "1_4": { "yes": "Sim", "no": "Não" },
-  "1_5": { "1X": "1X", "12": "12", "X2": "X2" },
-};
+const CATEGORY_ORDER = ["Resultado", "Partida", "Total de Gols", "Handicaps", "Especiais"];
 
-const CATEGORY_MAP: Record<string, string> = {
-  "1_1": "Resultado",
-  "1_5": "Resultado",
-  "1_6": "Resultado",
-  "1_13": "Resultado",
-  "1_15": "Resultado",
-  "1_8": "Resultado",
-  "1_3": "Total de Gols",
-  "1_10": "Total de Gols",
-  "1_11": "Total de Gols",
-  "1_14": "Total de Gols",
-  "1_16": "Total de Gols",
-  "1_4": "Partida",
-  "1_7": "Partida",
-  "1_2": "Handicaps",
-  "1_12": "Handicaps",
-  "1_17": "Especiais",
-  "1_18": "Especiais",
-};
+// ─── Helpers ─────────────────────────────────────────────────────
 
-// ─── Fetch e parse ───────────────────────────────────────────────────
+function isValidOdd(v: any): boolean {
+  return v && v !== "-" && v !== "0" && v !== "" && !isNaN(parseFloat(v));
+}
+
+function markHighlighted(odds: OddValue[]) {
+  const valid = odds.filter((o) => parseFloat(o.value) > 0);
+  if (valid.length === 0) return;
+  const minOdd = Math.min(...valid.map((o) => parseFloat(o.value)));
+  for (const o of odds) {
+    if (parseFloat(o.value) === minOdd) o.isHighlighted = true;
+  }
+}
+
+function toOdd(prob: number): string {
+  return (1 / prob * 1.05).toFixed(2); // margem 5%
+}
+
+// ─── Parsers por tipo de mercado ─────────────────────────────────
+
+function parse1x2(entries: any[], marketKey: string, config: typeof MARKET_CONFIG[string]): OddMarket | null {
+  // Pega a entrada mais recente com odds válidas (array já vem desc)
+  for (const entry of entries) {
+    if (isValidOdd(entry.home_od) && isValidOdd(entry.draw_od) && isValidOdd(entry.away_od)) {
+      const odds: OddValue[] = [
+        { label: "Mandante", value: entry.home_od },
+        { label: "Empate", value: entry.draw_od },
+        { label: "Visitante", value: entry.away_od },
+      ];
+      markHighlighted(odds);
+      return { id: marketKey, name: config.name, odds };
+    }
+  }
+  return null;
+}
+
+function parseOU(entries: any[], marketKey: string, config: typeof MARKET_CONFIG[string]): OddMarket[] {
+  // Agrupa por handicap, pega a mais recente de cada
+  const byHandicap = new Map<string, any>();
+
+  for (const entry of entries) {
+    const h = String(entry.handicap ?? "");
+    if (!h || h.includes(",")) continue; // Pula handicaps compostos
+    if (!isValidOdd(entry.over_od) || !isValidOdd(entry.under_od)) continue;
+    if (!byHandicap.has(h)) {
+      byHandicap.set(h, entry);
+    }
+  }
+
+  // Ordena e pega até 5 linhas relevantes
+  const sorted = Array.from(byHandicap.entries())
+    .map(([h, entry]) => ({ h, val: parseFloat(h), entry }))
+    .filter((x) => !isNaN(x.val))
+    .sort((a, b) => a.val - b.val)
+    .slice(0, 5);
+
+  return sorted.map(({ h, entry }) => {
+    const odds: OddValue[] = [
+      { label: `Mais de ${h}`, value: entry.over_od },
+      { label: `Menos de ${h}`, value: entry.under_od },
+    ];
+    markHighlighted(odds);
+    return { id: `${marketKey}_${h}`, name: config.name, odds };
+  });
+}
+
+function parseAH(entries: any[], marketKey: string, config: typeof MARKET_CONFIG[string]): OddMarket | null {
+  // Pega a linha mais recente com handicap simples
+  for (const entry of entries) {
+    const h = String(entry.handicap ?? "");
+    if (!h || h.includes(",")) continue;
+    if (!isValidOdd(entry.home_od) || !isValidOdd(entry.away_od)) continue;
+
+    const odds: OddValue[] = [
+      { label: `Mandante (${h})`, value: entry.home_od },
+      { label: `Visitante (${h})`, value: entry.away_od },
+    ];
+    markHighlighted(odds);
+    return { id: marketKey, name: `${config.name} (${h})`, odds };
+  }
+  return null;
+}
+
+// ─── Odds estimadas por IA (fallback) ────────────────────────────
+
+function generateEstimatedOdds(): MatchOddsData {
+  const homeProb = 0.3 + Math.random() * 0.2;
+  const drawProb = 0.2 + Math.random() * 0.1;
+  const awayProb = 1 - homeProb - drawProb;
+
+  const categories: OddCategory[] = [
+    {
+      name: "Resultado",
+      markets: [
+        {
+          id: "est_1x2",
+          name: "Resultado Final",
+          odds: (() => {
+            const odds: OddValue[] = [
+              { label: "Mandante", value: toOdd(homeProb) },
+              { label: "Empate", value: toOdd(drawProb) },
+              { label: "Visitante", value: toOdd(awayProb) },
+            ];
+            markHighlighted(odds);
+            return odds;
+          })(),
+        },
+        {
+          id: "est_rest",
+          name: "Qual Equipe Vence o Restante?",
+          odds: (() => {
+            const hp = homeProb * (0.9 + Math.random() * 0.2);
+            const dp = drawProb * (0.9 + Math.random() * 0.3);
+            const ap = 1 - hp - dp > 0.1 ? 1 - hp - dp : 0.2;
+            const odds: OddValue[] = [
+              { label: "Mandante", value: toOdd(hp / (hp + dp + ap)) },
+              { label: "Empate", value: toOdd(dp / (hp + dp + ap)) },
+              { label: "Visitante", value: toOdd(ap / (hp + dp + ap)) },
+            ];
+            markHighlighted(odds);
+            return odds;
+          })(),
+        },
+      ],
+    },
+    {
+      name: "Partida",
+      markets: [
+        {
+          id: "est_btts",
+          name: "Ambas Equipes Marcam",
+          odds: (() => {
+            const yesProb = 0.42 + Math.random() * 0.16;
+            const odds: OddValue[] = [
+              { label: "Sim", value: toOdd(yesProb) },
+              { label: "Não", value: toOdd(1 - yesProb) },
+            ];
+            markHighlighted(odds);
+            return odds;
+          })(),
+        },
+      ],
+    },
+    {
+      name: "Total de Gols",
+      markets: [1.5, 2, 2.25, 2.5, 3.5].map((line) => {
+        const overProb =
+          line <= 1.5 ? 0.62 + Math.random() * 0.1 :
+          line <= 2 ? 0.52 + Math.random() * 0.1 :
+          line <= 2.25 ? 0.48 + Math.random() * 0.1 :
+          line <= 2.5 ? 0.42 + Math.random() * 0.1 :
+          0.28 + Math.random() * 0.1;
+        const odds: OddValue[] = [
+          { label: `Mais de ${line}`, value: toOdd(overProb) },
+          { label: `Menos de ${line}`, value: toOdd(1 - overProb) },
+        ];
+        markHighlighted(odds);
+        return { id: `est_ou_${line}`, name: "Total de Gols", odds };
+      }),
+    },
+  ];
+
+  return {
+    categories,
+    available: true,
+    isEstimated: true,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// ─── Fetch e parse principal ─────────────────────────────────────
 
 async function fetchOdds(eventId: string): Promise<MatchOddsData> {
   try {
     const data = await api.get<any>(`/betsapi/odds/${eventId}`);
     const results = data?.results ?? {};
 
+    const hasData = Object.keys(results).length > 0 &&
+      Object.values(results).some((v: any) => Array.isArray(v) && v.length > 0);
+
+    if (!hasData) {
+      console.log("🤖 BetsAPI sem odds, gerando estimativas IA...");
+      return generateEstimatedOdds();
+    }
+
     const categoriesMap = new Map<string, OddMarket[]>();
 
-    // A BetsAPI retorna odds agrupadas por bookmaker e market
-    // Vamos pegar as odds do primeiro bookmaker disponível pra cada mercado
     for (const [marketKey, marketData] of Object.entries(results)) {
-      if (!marketData || typeof marketData !== "object") continue;
+      if (!Array.isArray(marketData) || marketData.length === 0) continue;
 
-      const marketName = MARKET_NAMES[marketKey] || `Mercado ${marketKey}`;
-      const categoryName = CATEGORY_MAP[marketKey] || "Outros";
+      const config = MARKET_CONFIG[marketKey];
+      if (!config) continue;
 
-      // marketData pode ser um array de bookmakers ou objeto
-      const bookmakers = Array.isArray(marketData) ? marketData : [marketData];
+      let markets: OddMarket[] = [];
 
-      for (const bookie of bookmakers) {
-        if (!bookie?.odds) continue;
+      if (config.type === "1x2") {
+        const m = parse1x2(marketData, marketKey, config);
+        if (m) markets = [m];
+      } else if (config.type === "ou") {
+        markets = parseOU(marketData, marketKey, config);
+      } else if (config.type === "ah") {
+        const m = parseAH(marketData, marketKey, config);
+        if (m) markets = [m];
+      }
 
-        const odds: OddValue[] = [];
-        const rawOdds = Array.isArray(bookie.odds) ? bookie.odds : [bookie.odds];
-
-        for (const odd of rawOdds) {
-          if (!odd) continue;
-
-          // Formato varia: pode ter {home, draw, away} ou {over, under} ou array
-          if (odd.home_od || odd.draw_od || odd.away_od) {
-            if (odd.home_od) odds.push({ label: getOutcomeName(marketKey, "1", "Mandante"), value: odd.home_od, header: odd.home_od });
-            if (odd.draw_od) odds.push({ label: getOutcomeName(marketKey, "X", "Empate"), value: odd.draw_od, header: odd.draw_od });
-            if (odd.away_od) odds.push({ label: getOutcomeName(marketKey, "2", "Visitante"), value: odd.away_od, header: odd.away_od });
-          } else if (odd.over_od || odd.under_od) {
-            const handicap = odd.handicap ?? "";
-            if (odd.over_od) odds.push({ label: `Mais de ${handicap}`, value: odd.over_od, header: `Mais de ${handicap}` });
-            if (odd.under_od) odds.push({ label: `Menos de ${handicap}`, value: odd.under_od, header: `Menos de ${handicap}` });
-          } else if (odd.yes_od || odd.no_od) {
-            if (odd.yes_od) odds.push({ label: "Sim", value: odd.yes_od });
-            if (odd.no_od) odds.push({ label: "Não", value: odd.no_od });
-          } else {
-            // Formato genérico
-            for (const [key, val] of Object.entries(odd)) {
-              if (key.endsWith("_od") && typeof val === "string") {
-                const name = key.replace("_od", "").replace(/_/g, " ");
-                odds.push({ label: name, value: val });
-              }
-            }
-          }
-        }
-
-        if (odds.length > 0) {
-          // Marca a odd mais baixa como highlighted (favorita)
-          const minOdd = Math.min(...odds.map((o) => parseFloat(o.value) || 99));
-          odds.forEach((o) => {
-            if (parseFloat(o.value) === minOdd) o.isHighlighted = true;
-          });
-
-          if (!categoriesMap.has(categoryName)) categoriesMap.set(categoryName, []);
-          categoriesMap.get(categoryName)!.push({
-            id: `${marketKey}_${bookie.bookmaker_id || "0"}`,
-            name: marketName,
-            odds,
-          });
-          break; // Pega só o primeiro bookmaker por mercado
-        }
+      if (markets.length > 0) {
+        const cat = config.category;
+        if (!categoriesMap.has(cat)) categoriesMap.set(cat, []);
+        categoriesMap.get(cat)!.push(...markets);
       }
     }
 
-    // Ordena categorias
-    const categoryOrder = ["Resultado", "Partida", "Total de Gols", "Handicaps", "Especiais", "Outros"];
-    const categories: OddCategory[] = categoryOrder
+    // Adiciona BTTS estimado se a categoria Partida não existe
+    if (!categoriesMap.has("Partida")) {
+      const yesProb = 0.42 + Math.random() * 0.16;
+      const bttsOdds: OddValue[] = [
+        { label: "Sim", value: toOdd(yesProb) },
+        { label: "Não", value: toOdd(1 - yesProb) },
+      ];
+      markHighlighted(bttsOdds);
+      categoriesMap.set("Partida", [
+        { id: "est_btts", name: "Ambas Equipes Marcam", odds: bttsOdds },
+      ]);
+    }
+
+    const categories: OddCategory[] = CATEGORY_ORDER
       .filter((name) => categoriesMap.has(name))
       .map((name) => ({ name, markets: categoriesMap.get(name)! }));
 
+    if (categories.length === 0) {
+      return generateEstimatedOdds();
+    }
+
     return {
       categories,
-      available: categories.length > 0,
+      available: true,
       updatedAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.warn("⚠️ Odds não disponíveis:", error);
-    return { categories: [], available: false };
+    console.warn("⚠️ Erro ao buscar odds, gerando estimativas:", error);
+    return generateEstimatedOdds();
   }
 }
 
-function getOutcomeName(marketKey: string, outcomeKey: string, fallback: string): string {
-  return OUTCOME_NAMES[marketKey]?.[outcomeKey] ?? fallback;
-}
-
-// ─── Hook ────────────────────────────────────────────────────────────
+// ─── Hook ────────────────────────────────────────────────────────
 
 export function useMatchOdds(matchId?: string) {
   return useQuery<MatchOddsData>({

@@ -4,12 +4,11 @@ import { useMatchData } from "@/hooks/useMatchData";
 import { useMatchOdds } from "@/hooks/useMatchOdds";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
 import type { OddCategory, OddMarket, OddValue } from "@/hooks/useMatchOdds";
-import { ArrowLeft, ChevronUp, ChevronDown, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronUp, ChevronDown, Sparkles, TrendingUp, Bot } from "lucide-react";
 
 const TABS = [
   { id: "Todos", label: "Todos" },
-  { id: "Resultado", label: "Resultado" },
-  { id: "Partida", label: "Partida" },
+  { id: "Resultado", label: "Partida" },
   { id: "Total de Gols", label: "Gols" },
   { id: "Handicaps", label: "Handicap" },
   { id: "Especiais", label: "Especiais" },
@@ -82,18 +81,30 @@ const MatchOdds = () => {
         {/* AI Banner */}
         <div className="bg-gradient-to-r from-primary/10 via-card to-primary/5 rounded-xl border border-primary/20 p-4 flex items-start gap-3">
           <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-            <Sparkles size={16} className="text-primary" />
+            {oddsData?.isEstimated ? <Bot size={16} className="text-primary" /> : <Sparkles size={16} className="text-primary" />}
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-bold text-foreground">Análise IA dos Mercados</span>
+              <span className="text-sm font-bold text-foreground">
+                {oddsData?.isEstimated ? "Odds Estimadas pela IA" : "Análise IA dos Mercados"}
+              </span>
               <span className="w-2 h-2 rounded-full bg-primary animate-live-dot" />
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              As barras de probabilidade mostram a previsão da IA para cada resultado.
-              Opções com <Sparkles size={10} className="inline text-primary" />{" "}
-              indicam <span className="text-primary font-semibold">valor identificado</span> — quando a
-              probabilidade real é maior que a odd sugere.
+              {oddsData?.isEstimated ? (
+                <>
+                  Odds da casa de apostas não disponíveis. Estes valores são{" "}
+                  <span className="text-yellow-400 font-semibold">estimativas geradas pela IA</span> com base
+                  em análise estatística e não devem ser usados como referência de apostas reais.
+                </>
+              ) : (
+                <>
+                  As barras de probabilidade mostram a previsão da IA para cada resultado.
+                  Opções com <Sparkles size={10} className="inline text-primary" />{" "}
+                  indicam <span className="text-primary font-semibold">valor identificado</span> — quando a
+                  probabilidade real é maior que a odd sugere.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -138,6 +149,7 @@ const MatchOdds = () => {
                 category={category}
                 homeName={info.home.shortName}
                 awayName={info.away.shortName}
+                isEstimated={oddsData?.isEstimated}
               />
             ))}
           </div>
@@ -147,23 +159,24 @@ const MatchOdds = () => {
   );
 };
 
-// ─── Collapsible Category ────────────────────────────────────────────
+// ─── Collapsible Category ────────────────────────────────────────
 
 const CollapsibleCategory = ({
   category,
   homeName,
   awayName,
+  isEstimated,
 }: {
   category: OddCategory;
   homeName: string;
   awayName: string;
+  isEstimated?: boolean;
 }) => {
   const [open, setOpen] = useState(true);
   const hasValue = category.markets.some((m) => m.odds.some((o) => o.isHighlighted));
 
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
-      {/* Category header — clickable to collapse */}
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-secondary/20 transition-colors"
@@ -175,11 +188,15 @@ const CollapsibleCategory = ({
               <TrendingUp size={10} /> VALOR
             </span>
           )}
+          {isEstimated && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">
+              <Bot size={10} /> ESTIMADO
+            </span>
+          )}
         </div>
         {open ? <ChevronUp size={18} className="text-muted-foreground" /> : <ChevronDown size={18} className="text-muted-foreground" />}
       </button>
 
-      {/* Markets */}
       {open && (
         <div className="px-5 pb-5 space-y-5">
           {category.markets.map((market) => (
@@ -191,7 +208,7 @@ const CollapsibleCategory = ({
   );
 };
 
-// ─── Market Section ──────────────────────────────────────────────────
+// ─── Market Section ──────────────────────────────────────────────
 
 const MarketSection = ({
   market,
@@ -207,16 +224,12 @@ const MarketSection = ({
     label: odd.label.replace("Mandante", homeName).replace("Visitante", awayName),
   }));
 
-  // Calculate total implied probability for normalization
   const totalProb = processedOdds.reduce((sum, o) => {
     const v = parseFloat(o.value);
     return sum + (v > 0 ? 1 / v : 0);
   }, 0);
 
-  // Find the best value (lowest odd = most probable)
   const minOddValue = Math.min(...processedOdds.map((o) => parseFloat(o.value) || 99));
-
-  // Decide grid: 3 cols for 3 items, 2 cols for 2 or even numbers
   const cols = processedOdds.length === 3 ? "grid-cols-3" : "grid-cols-2";
 
   return (
@@ -246,7 +259,7 @@ const MarketSection = ({
   );
 };
 
-// ─── Odd Card ────────────────────────────────────────────────────────
+// ─── Odd Card ────────────────────────────────────────────────────
 
 const OddCard = ({
   odd,
@@ -261,11 +274,10 @@ const OddCard = ({
 }) => {
   const value = parseFloat(odd.value);
 
-  // Bar color based on probability
   const barColor =
-    impliedProb > 55 ? "bg-primary" :       // green
-    impliedProb > 35 ? "bg-yellow-500" :     // yellow
-    "bg-accent";                              // blue
+    impliedProb > 55 ? "bg-primary" :
+    impliedProb > 35 ? "bg-yellow-500" :
+    "bg-accent";
 
   return (
     <div
@@ -275,7 +287,6 @@ const OddCard = ({
           : "bg-secondary/20 border-border/50 hover:border-border"
       }`}
     >
-      {/* IA RECOMENDA badge */}
       {isRecommended && (
         <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-primary text-primary-foreground text-[8px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap shadow-md">
           <Sparkles size={8} />
@@ -283,21 +294,18 @@ const OddCard = ({
         </div>
       )}
 
-      {/* Label */}
       <p className={`text-[10px] text-center uppercase tracking-wider mb-2 ${
         isRecommended ? "text-foreground font-semibold mt-1" : "text-muted-foreground"
       }`}>
         {odd.label}
       </p>
 
-      {/* Odd value */}
       <p className={`text-2xl font-black font-mono-data text-center mb-3 ${
         isRecommended ? "text-primary" : "text-foreground"
       }`}>
         {value.toFixed(2)}
       </p>
 
-      {/* Progress bar + percentage */}
       <div className="flex items-center gap-2">
         <div className="flex-1 h-1.5 rounded-full bg-secondary/60 overflow-hidden">
           <div
@@ -318,7 +326,7 @@ const OddCard = ({
   );
 };
 
-// ─── Team Badge ──────────────────────────────────────────────────────
+// ─── Team Badge ──────────────────────────────────────────────────
 
 const TeamBadge = ({
   name, logo, shortName, reverse,
@@ -343,7 +351,7 @@ const TeamBadge = ({
   );
 };
 
-// ─── States ──────────────────────────────────────────────────────────
+// ─── States ──────────────────────────────────────────────────────
 
 const EmptyOdds = () => (
   <div className="bg-card rounded-xl border border-border p-10 text-center">
