@@ -66,7 +66,7 @@ function convertBetsApiToMatchState(data: any): MatchState | null {
 
     const timer = event.timer;
     const minute = timer ? `${timer.tm}:${String(timer.ts ?? 0).padStart(2, "0")}` : "0";
-    const half = timer?.tt === "1" ? "1º Tempo" : timer?.tt === "2" ? "2º Tempo" : "";
+    const half = getHalfFromTimer(timer, minute);
     const isLive = event.time_status === "1";
 
     const stats = event.stats ?? {};
@@ -298,26 +298,30 @@ function generateTimeline(event: any, stats: any): MatchState["timeline"] {
 }
 
 function generateHeatPoints(stats: any): MatchState["heatPoints"] {
-  const points: MatchState["heatPoints"] = [];
   const possession = stats.possession_rt;
   const homePoss = possession ? parseFloat(possession[0]) / 100 : 0.5;
 
-  // Gerar pontos de calor baseados na posse
+  // Pontos mais espalhados e sem acúmulo no centro
   const basePoints = [
-    { x: 25, y: 50, intensity: homePoss },
-    { x: 35, y: 35, intensity: homePoss * 0.8 },
-    { x: 35, y: 65, intensity: homePoss * 0.7 },
-    { x: 45, y: 50, intensity: 0.5 },
-    { x: 50, y: 40, intensity: 0.4 },
-    { x: 50, y: 60, intensity: 0.4 },
-    { x: 65, y: 35, intensity: (1 - homePoss) * 0.7 },
-    { x: 65, y: 65, intensity: (1 - homePoss) * 0.8 },
-    { x: 75, y: 50, intensity: 1 - homePoss },
+    // Defesa casa
+    { x: 15, y: 25, intensity: (1 - homePoss) * 0.5 },
+    { x: 15, y: 45, intensity: (1 - homePoss) * 0.4 },
+    // Meio-campo casa
+    { x: 35, y: 20, intensity: homePoss * 0.6 },
+    { x: 35, y: 40, intensity: homePoss * 0.7 },
+    // Centro (baixa intensidade pra não ficar vermelho)
+    { x: 50, y: 30, intensity: 0.15 },
+    // Meio-campo visitante
+    { x: 65, y: 20, intensity: (1 - homePoss) * 0.6 },
+    { x: 65, y: 40, intensity: (1 - homePoss) * 0.7 },
+    // Ataque casa / defesa visitante
+    { x: 80, y: 25, intensity: homePoss * 0.5 },
+    { x: 80, y: 45, intensity: homePoss * 0.4 },
   ];
 
   return basePoints.map((p) => ({
     ...p,
-    intensity: Math.max(0.1, Math.min(1, p.intensity)),
+    intensity: Math.max(0.05, Math.min(0.8, p.intensity)),
   }));
 }
 
@@ -389,4 +393,22 @@ export async function checkApiHealth(): Promise<boolean> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getHalfFromTimer(timer: any, minute: string): string {
+  if (!timer) return "";
+
+  const tt = String(timer.tt);
+
+  if (tt === "1") return "1º Tempo";
+  if (tt === "2") return "2º Tempo";
+  if (tt === "0") return "Intervalo";
+
+  // Fallback: deduz pelo minuto
+  const mins = parseInt(minute) || 0;
+  if (mins <= 45) return "1º Tempo";
+  if (mins <= 90) return "2º Tempo";
+  if (mins > 90) return "Prorrogação";
+
+  return "";
 }

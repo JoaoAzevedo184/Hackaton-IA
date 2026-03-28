@@ -9,7 +9,7 @@ interface MatchHeaderProps {
 // TODO: mover para constants/brand.ts quando houver mais config de marca
 const BRAND = {
   initials: "ED",
-  name: "EDScript Analytics",
+  name: "Edson IA",
 } as const;
 
 const MatchHeader: FC<MatchHeaderProps> = ({ league, season, round }) => {

@@ -48,7 +48,7 @@ const ChatPanel: FC<ChatPanelProps> = ({
   scrollRef,
 }) => (
   <div
-    className={`fixed bottom-20 right-4 z-50 w-[360px] max-h-[560px] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
+    className={`fixed bottom-20 right-4 z-50 w-[420px] max-h-[640px] flex flex-col bg-card border border-border rounded-xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] transition-all duration-300 origin-bottom-right ${
       isOpen
         ? "scale-100 opacity-100 pointer-events-auto"
         : "scale-90 opacity-0 pointer-events-none"
@@ -61,7 +61,7 @@ const ChatPanel: FC<ChatPanelProps> = ({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground">
-          Assistente de Apostas
+          Edson IA
         </p>
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-live-dot" />
@@ -265,7 +265,7 @@ const FloatingButton: FC<{
 }> = ({ isOpen, onToggle }) => (
   <button
     onClick={onToggle}
-    className={`fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all active:scale-95 ${
+    className={`fixed bottom-4 right-4 z-50 w-16 h-16 rounded-full flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.4)] transition-all active:scale-95 ${
       isOpen
         ? "bg-secondary text-foreground"
         : "bg-primary text-primary-foreground shadow-[0_4px_24px_hsla(142,72%,48%,0.25)]"
